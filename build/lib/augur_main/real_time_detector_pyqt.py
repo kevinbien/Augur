@@ -3,18 +3,18 @@ from multiprocessing import Process
 import sounddevice as sd
 from collections import deque
 from screeninfo import get_monitors
-from pathlib import Path
-import re
 import numpy as np
 import soundfile as sf
+from importlib import resources
+import assets
 import torch
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QComboBox
 import pyqtgraph
 
-from augur_main.song_identifier_model import SongIdentifier
+from song_identifier_model import SongIdentifier
 
 
-def record_and_detect(input_device, song_dest, model, padding_seconds=5, rate=22050):
+def record_and_detect(input_device, song_dest, padding_seconds=5, rate=22050):
     try:
 
         # Create audio stream
@@ -28,6 +28,17 @@ def record_and_detect(input_device, song_dest, model, padding_seconds=5, rate=22
 
         # Create data structure to hold 0.5s segments of audio from the input stream
         chunks = deque()
+
+        # Load model
+        print("loading model...")
+        model = SongIdentifier()
+        model_path = ""
+        for file in resources.files(assets).iterdir():
+            if ".pth" in str(file):
+                model_path = file
+        model.load_state_dict(torch.load(model_path, weights_only=True))
+        model.eval()
+        print("model loaded!")
 
         # Create two variables before reading audio from the stream. has_song is True iff at least one of the
         # audio segments stored in chunks is classified as song. found_songs stores the number of songs found while
@@ -106,20 +117,6 @@ class RealTimeDetector(QWidget):
         # Create recording process
         self.recording_process = None
 
-        # Load model
-        print("Loading model...")
-        self.model = SongIdentifier()
-        model_path = (
-            re.sub(
-                pattern="real_time_detector_pyqt.py",
-                repl="model_2.2_0.995.pth",
-                string=str(Path(__file__).resolve()),
-            ),
-        )
-        self.model.load_state_dict(torch.load(model_path[0], weights_only=True))
-        self.model.eval()
-        print("Model loaded!")
-
         # Create buttons
         self.start_button = QPushButton("Start recording", self)
         self.stop_button = QPushButton("Stop recording", self)
@@ -155,7 +152,7 @@ class RealTimeDetector(QWidget):
         try:
             self.recording_process.terminate()
             self.recording_process = None
-            print("Recording ended")
+            print("Eecording ended")
         except AttributeError:
             print("Please start the recording before ending it...")
 

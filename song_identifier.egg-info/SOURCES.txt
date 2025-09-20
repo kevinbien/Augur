@@ -1,0 +1,10 @@
+setup.py
+augur_main/__init__.py
+augur_main/real_time_detector_pyqt.py
+augur_main/song_identifier_model.py
+song_identifier.egg-info/PKG-INFO
+song_identifier.egg-info/SOURCES.txt
+song_identifier.egg-info/dependency_links.txt
+song_identifier.egg-info/entry_points.txt
+song_identifier.egg-info/requires.txt
+song_identifier.egg-info/top_level.txt
