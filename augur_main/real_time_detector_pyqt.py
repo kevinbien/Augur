@@ -8,13 +8,25 @@ import re
 import numpy as np
 import soundfile as sf
 import torch
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QComboBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QApplication,
+    QSizePolicy,
+    QWidget,
+    QGridLayout,
+    QPushButton,
+    QComboBox,
+    QFileDialog,
+    QLabel,
+)
 import pyqtgraph
 
 from augur_main.song_identifier_model import SongIdentifier
 
 
-def record_and_detect(input_device, song_dest, model, padding_seconds=5, rate=22050):
+def record_and_detect(
+    input_device, song_dest, model_path, padding_seconds=5, rate=22050
+):
     try:
 
         # Create audio stream
@@ -25,6 +37,13 @@ def record_and_detect(input_device, song_dest, model, padding_seconds=5, rate=22
             blocksize=(rate // 2),
         )
         stream.start()
+
+        # Load model
+        print("Loading model...")
+        model = SongIdentifier()
+        model.load_state_dict(torch.load(model_path, weights_only=True))
+        model.eval()
+        print("Model loaded!")
 
         # Create data structure to hold 0.5s segments of audio from the input stream
         chunks = deque()
@@ -67,17 +86,11 @@ def record_and_detect(input_device, song_dest, model, padding_seconds=5, rate=22
                         audio[i * len(chunk) : (i + 1) * len(chunk)] = chunk
                     assert len(chunks) == padding_seconds * 2
                     sf.write(
-                        song_dest + "\\found_song_" + str(found_songs) + ".wav",
+                        Path(song_dest) / f"found_song_{found_songs}.wav",
                         audio,
                         rate,
                     )
-                    print(
-                        "saving file "
-                        + song_dest
-                        + "\\found_song_"
-                        + str(found_songs)
-                        + ".wav"
-                    )
+                    print(f"Saved {Path(song_dest) / f"found_song_{found_songs}.wav"}")
                     has_song = False
                     counter = padding_seconds * 2
                 # If counter equals zero but chunks does not contain song, remove the leftmost segment in chunks
@@ -100,35 +113,52 @@ class RealTimeDetector(QWidget):
         self.setGeometry(0, 0, width, height)
 
         # Set the layout for the window
-        layout = QVBoxLayout()
+        layout = QGridLayout()
         self.setLayout(layout)
 
         # Create recording process
         self.recording_process = None
 
-        # Load model
-        print("Loading model...")
-        self.model = SongIdentifier()
-        model_path = (
-            re.sub(
-                pattern="real_time_detector_pyqt.py",
-                repl="model_2.2_0.995.pth",
-                string=str(Path(__file__).resolve()),
-            ),
-        )
-        self.model.load_state_dict(torch.load(model_path[0], weights_only=True))
-        self.model.eval()
-        print("Model loaded!")
+        # Default song_dest is None until user chooses
+        self.song_dest = None
 
         # Create buttons
+        self.ofolder_button = QPushButton("Choose output folder", self)
+        self.ifolder_button = QPushButton("Choose input folder", self)
         self.start_button = QPushButton("Start recording", self)
         self.stop_button = QPushButton("Stop recording", self)
-        self.plot_button = QPushButton("Plot audio", self)
+        self.filter_button = QPushButton("Filter song from existing folder")
         self.start_button.clicked.connect(self._start_recording)
         self.stop_button.clicked.connect(self._stop_recording)
-        self.plot_button.clicked.connect(self._plot_audio)
-        layout.addWidget(self.start_button)
-        layout.addWidget(self.stop_button)
+        self.filter_button.clicked.connect(self._filter_song)
+        self.ifolder_button.clicked.connect(self._choose_folder)
+        self.ofolder_button.clicked.connect(self._choose_folder)
+        layout.addWidget(self.ifolder_button, 1, 1)
+        layout.addWidget(self.ofolder_button, 2, 1)
+        layout.addWidget(self.filter_button, 3, 0, 1, 2)
+        font = self.filter_button.font()
+        font.setBold(True)
+        self.filter_button.setFont(font)
+        layout.addWidget(self.start_button, 6, 0)
+        layout.addWidget(self.stop_button, 6, 1)
+
+        # Create labels
+        self.folders_label = QLabel("Input/output folder paths", self)
+        self.recording_label = QLabel("Filter song during live recording", self)
+        self.ifolder_label = QLabel("No input folder selected:", self)
+        self.ofolder_label = QLabel("No output folder selected:", self)
+        self.device_label = QLabel("Select input device:", self)
+        layout.addWidget(self.folders_label, 0, 0, 1, 2)
+        layout.addWidget(self.recording_label, 4, 0, 1, 2)
+        layout.addWidget(self.ifolder_label, 1, 0)
+        layout.addWidget(self.ofolder_label, 2, 0)
+        layout.addWidget(self.device_label, 5, 0)
+        font = self.folders_label.font()
+        font.setBold(True)
+        self.folders_label.setFont(font)
+        self.recording_label.setFont(font)
+        self.folders_label.setAlignment(Qt.AlignCenter)
+        self.recording_label.setAlignment(Qt.AlignCenter)
 
         # Create input device combobox
         self.device_box = QComboBox()
@@ -138,7 +168,27 @@ class RealTimeDetector(QWidget):
         if self.device_box.count() == 0:
             self.device_box.setCurrentText("No input device found...")
             self.start_button.setDisabled(True)
-        layout.addWidget(self.device_box)
+        layout.addWidget(self.device_box, 5, 1)
+
+        # Make widgets fill cells
+        for i in range(2):
+            layout.setColumnStretch(i, 1)
+        for i in range(7):
+            layout.setRowStretch(i, 1)
+
+        for widget in [
+            self.folders_label,
+            self.start_button,
+            self.stop_button,
+            self.device_label,
+            self.device_box,
+            self.filter_button,
+            self.ifolder_button,
+            self.ifolder_label,
+            self.ofolder_button,
+            self.ofolder_label,
+        ]:
+            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
     def _start_recording(self):
         if (
@@ -146,10 +196,20 @@ class RealTimeDetector(QWidget):
             and self.recording_process.is_alive()
         ):
             print("Please stop recording before starting again...")
+        elif self.song_dest is None:
+            print("Please choose a folder to save songs before starting to record")
         else:
             print("Recording started")
-            self.recording_process = Process(target=record_and_detect)
+            input_device = self.device_box.currentData()
+            model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pth"
+            self.recording_process = Process(
+                target=record_and_detect,
+                args=(input_device, self.song_dest, model_path),
+            )
             self.recording_process.start()
+
+    def _filter_song(self):
+        print("test")
 
     def _stop_recording(self):
         try:
@@ -161,6 +221,15 @@ class RealTimeDetector(QWidget):
 
     def _plot_audio(self):
         print()
+
+    def _choose_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select folder")
+        if folder:
+            self.song_dest = folder
+            if self.sender() is self.ifolder_button:
+                self.ifolder_label.setText(f"Read from: {folder}")
+            else:
+                self.ofolder_label.setText(f"Save to: {folder}")
 
 
 def main():
