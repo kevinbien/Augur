@@ -7,7 +7,7 @@ setup(
     install_requires=["pytorch", "librosa"],
     entry_points={
         "console_scripts": [
-            "myscript = real-time-detector-pyqt:main",
+            "augur = augur_main.real_time_detector_pyqt:main",
         ],
     },
 )

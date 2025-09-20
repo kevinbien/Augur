@@ -142,9 +142,9 @@ class RealTimeDetector(QWidget):
             isinstance(self.recording_process, Process)
             and self.recording_process.is_alive()
         ):
-            print("please stop recording before starting again")
+            print("Please stop recording before starting again...")
         else:
-            print("recording started")
+            print("Recording started")
             self.recording_process = Process(target=record_and_detect)
             self.recording_process.start()
 
@@ -152,17 +152,21 @@ class RealTimeDetector(QWidget):
         try:
             self.recording_process.terminate()
             self.recording_process = None
-            print("recording ended")
+            print("Eecording ended")
         except AttributeError:
-            print("please start the recording before ending it")
+            print("Please start the recording before ending it...")
 
     def _plot_audio(self):
         print()
 
 
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
     window = RealTimeDetector()
     window.show()
     app.exec()
     sys.exit()
+
+
+if __name__ == "__main__":
+    main()
