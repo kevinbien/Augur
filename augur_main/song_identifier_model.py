@@ -11,10 +11,12 @@ from torch.utils.data import Dataset, DataLoader
 
 
 # preprocessing function
-def generate_spectrogram(wav):
+def generate_spectrogram(wav, sr=22050):
     if isinstance(wav, str) or isinstance(wav, Path):
-        wav, sr = librosa.load(wav, sr=None)
-    mels = librosa.feature.melspectrogram(y=wav, n_fft=512, hop_length=86)
+        wav, _ = librosa.load(wav)
+    mels = librosa.feature.melspectrogram(
+        y=wav, n_fft=512, hop_length=int((sr // 2) / 128)
+    )
     mels = librosa.amplitude_to_db(mels)
     mels -= np.mean(mels)
     mels /= np.std(mels)
@@ -98,7 +100,7 @@ class SongIdentifier(nn.Module):
             preds = []
             rounded_seconds = (len(audio) // sample_rate) + 1
             rounded_audio = librosa.util.fix_length(
-                audio, rounded_seconds * sample_rate
+                audio, size=rounded_seconds * sample_rate
             )
             windows = rounded_seconds
             if overlap_windows:

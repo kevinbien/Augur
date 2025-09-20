@@ -4,7 +4,10 @@ import sounddevice as sd
 from collections import deque
 from screeninfo import get_monitors
 from pathlib import Path
-import re
+import librosa
+import os
+import traceback
+import shutil
 import numpy as np
 import soundfile as sf
 import torch
@@ -90,7 +93,8 @@ def record_and_detect(
                         audio,
                         rate,
                     )
-                    print(f"Saved {Path(song_dest) / f"found_song_{found_songs}.wav"}")
+                    out = Path(song_dest) / f"found_song_{found_songs}.wav"
+                    print(f"Saved {out}")
                     has_song = False
                     counter = padding_seconds * 2
                 # If counter equals zero but chunks does not contain song, remove the leftmost segment in chunks
@@ -101,6 +105,49 @@ def record_and_detect(
 
     except Exception as e:
         print(e)
+
+
+def process_folder(
+    model, input_folder, output_folder, threshold=0.5, overlap_windows=False
+):
+    if not isinstance(model, SongIdentifier):
+        print("Loading model...")
+        m = SongIdentifier()
+        m.load_state_dict(torch.load(model, weights_only=True))
+        m.eval()
+        model = m
+        print("Model loaded!")
+    local_output = Path(input_folder) / "auspicious files"
+    if any(Path(input_folder).glob("*.wav")):
+        if local_output.exists():
+            for file in local_output.glob("*.wav"):
+                file.unlink()
+        local_output.mkdir(parents=True, exist_ok=True)
+        if output_folder is not None:
+            print(f"outputting to {local_output} and {output_folder}")
+        else:
+            print(f"outputting to {local_output}")
+        for file in Path(input_folder).glob("*.wav"):
+            try:
+                print(f"processing {file.name}")
+                audio, sr = librosa.load(file, sr=22050)
+                if model.classify(
+                    audio=audio,
+                    threshold=threshold,
+                    sample_rate=sr,
+                    overlap_windows=overlap_windows,
+                ):
+                    shutil.copy(file, local_output)
+                    if output_folder is not None:
+                        shutil.copy(file, output_folder)
+                    print(f"found song in {file.name}")
+            except Exception as e:
+                traceback.print_exception(type(e), e, e.__traceback__)
+                print(f"something went wrong... skipping file {file.name}")
+        print(f"finished processing {str(input_folder)}!")
+        os.system("cls" if os.name == "nt" else "clear")
+    else:
+        print(f"{str(input_folder)} contained no audio files")
 
 
 class RealTimeDetector(QWidget):
@@ -116,10 +163,12 @@ class RealTimeDetector(QWidget):
         layout = QGridLayout()
         self.setLayout(layout)
 
-        # Create recording process
+        # Set processes to none until user starts process
         self.recording_process = None
+        self.filtering_process = None
 
-        # Default song_dest is None until user chooses
+        # Set folder paths to None until user chooses
+        self.song_loc = None
         self.song_dest = None
 
         # Create buttons
@@ -209,7 +258,22 @@ class RealTimeDetector(QWidget):
             self.recording_process.start()
 
     def _filter_song(self):
-        print("test")
+        if (
+            isinstance(self.filtering_process, Process)
+            and self.filtering_process.is_alive()
+        ):
+            print(
+                "Please wait for filtering process to finish before starting again..."
+            )
+        if self.song_loc is None:
+            print("Please provide an input folder before filtering for song")
+        else:
+            model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pth"
+            self.filtering_process = Process(
+                target=process_folder,
+                args=(model_path, self.song_loc, self.song_dest),
+            )
+            self.filtering_process.start()
 
     def _stop_recording(self):
         try:
@@ -220,15 +284,16 @@ class RealTimeDetector(QWidget):
             print("Please start the recording before ending it...")
 
     def _plot_audio(self):
-        print()
+        print("test")
 
     def _choose_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select folder")
         if folder:
-            self.song_dest = folder
             if self.sender() is self.ifolder_button:
+                self.song_loc = folder
                 self.ifolder_label.setText(f"Read from: {folder}")
             else:
+                self.song_dest = folder
                 self.ofolder_label.setText(f"Save to: {folder}")
 
 
