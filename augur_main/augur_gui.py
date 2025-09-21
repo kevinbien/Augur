@@ -108,7 +108,12 @@ def record_and_detect(
 
 
 def process_folder(
-    model, input_folder, output_folder, threshold=0.5, overlap_windows=False
+    model,
+    input_folder,
+    output_folder,
+    threshold=0.5,
+    overlap_windows=True,
+    clear=False,
 ):
     if not isinstance(model, SongIdentifier):
         print("Loading model...")
@@ -117,7 +122,11 @@ def process_folder(
         m.eval()
         model = m
         print("Model loaded!")
-    local_output = Path(input_folder) / "auspicious files"
+    local_output = Path(input_folder) / "Found song"
+    subdirs = [file for file in Path(input_folder).iterdir() if file.is_dir()]
+    if len(subdirs) > 0:
+        for subdir in subdirs:
+            process_folder(model, subdir, output_folder)
     if any(Path(input_folder).glob("*.wav")):
         if local_output.exists():
             for file in local_output.glob("*.wav"):
@@ -139,13 +148,17 @@ def process_folder(
                 ):
                     shutil.copy(file, local_output)
                     if output_folder is not None:
-                        shutil.copy(file, output_folder)
+                        shutil.copy(
+                            file,
+                            Path(output_folder) / f"{input_folder.name}_{file.name}",
+                        )
                     print(f"found song in {file.name}")
             except Exception as e:
                 traceback.print_exception(type(e), e, e.__traceback__)
                 print(f"something went wrong... skipping file {file.name}")
+        if clear:
+            os.system("cls" if os.name == "nt" else "clear")
         print(f"finished processing {str(input_folder)}!")
-        os.system("cls" if os.name == "nt" else "clear")
     else:
         print(f"{str(input_folder)} contained no audio files")
 

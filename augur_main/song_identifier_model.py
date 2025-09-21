@@ -94,8 +94,10 @@ class SongIdentifier(nn.Module):
         sample_rate=22050,
         overlap_windows=False,
     ):
-        assert len(audio) >= sample_rate
-        if len(audio) > sample_rate:
+        assert (
+            len(audio) >= sample_rate // 2
+        ), "Cannot classify audio segments less than 0.5s..."
+        if len(audio) > sample_rate // 2:
             has_song = False
             preds = []
             rounded_seconds = (len(audio) // sample_rate) + 1

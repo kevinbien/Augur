@@ -1,6 +1,6 @@
 setup.py
 augur_main/__init__.py
-augur_main/real_time_detector_pyqt.py
+augur_main/augur_gui.py
 augur_main/song_identifier_model.py
 song_identifier.egg-info/PKG-INFO
 song_identifier.egg-info/SOURCES.txt
