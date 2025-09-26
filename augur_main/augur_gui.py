@@ -30,7 +30,7 @@ from augur_main.song_identifier_model import SongIdentifier
 
 
 def record_and_detect(
-    input_device, song_dest, model_path, padding_seconds=5, rate=22050
+    input_device, song_dest, model_path, padding_seconds=5, rate=22050, channel=-1
 ):
     try:
 
@@ -113,10 +113,10 @@ def process_folder(
     model,
     input_folder,
     output_folder,
+    channel,
     threshold=0.5,
     overlap_windows=True,
     clear=False,
-    channel=-1,
 ):
     if not isinstance(model, SongIdentifier):
         print("Loading model...")
@@ -297,12 +297,22 @@ class AugurGUI(QWidget):
         if self.song_loc is None:
             print("Please provide an input folder before filtering for song")
         else:
-            model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pth"
-            self.filtering_process = Process(
-                target=process_folder,
-                args=(model_path, self.song_loc, self.song_dest),
-            )
-            self.filtering_process.start()
+            try:
+                model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pth"
+                self.filtering_process = Process(
+                    target=process_folder,
+                    args=(
+                        model_path,
+                        self.song_loc,
+                        self.song_dest,
+                        int(self.channel_text.text()),
+                    ),
+                )
+                self.filtering_process.start()
+            except:
+                print(
+                    "Please make sure you have correctly specified the input folder and channel..."
+                )
 
     def _stop_recording(self):
         try:
