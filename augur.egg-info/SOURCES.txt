@@ -1,0 +1,10 @@
+setup.py
+augur.egg-info/PKG-INFO
+augur.egg-info/SOURCES.txt
+augur.egg-info/dependency_links.txt
+augur.egg-info/entry_points.txt
+augur.egg-info/requires.txt
+augur.egg-info/top_level.txt
+augur_main/__init__.py
+augur_main/augur_gui.py
+augur_main/song_identifier_model.py

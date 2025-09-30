@@ -129,7 +129,7 @@ def process_folder(
     subdirs = [file for file in Path(input_folder).iterdir() if file.is_dir()]
     if len(subdirs) > 0:
         for subdir in subdirs:
-            process_folder(model, subdir, output_folder)
+            process_folder(model, subdir, output_folder, channel)
     if any(Path(input_folder).glob("*.wav")):
         if local_output.exists():
             for file in local_output.glob("*.wav"):
@@ -142,10 +142,8 @@ def process_folder(
         for file in Path(input_folder).glob("*.wav"):
             try:
                 print(f"processing {file.name}")
-                if channel == -1:
-                    audio, sr = librosa.load(file, sr=22050)
-                else:
-                    audio, sr = librosa.load(file, sr=22050, mono=False)
+                audio, sr = librosa.load(file, sr=22050, mono=False)
+                if audio.ndim > 1:
                     audio = audio[channel]
                 if model.classify(
                     audio=audio,
@@ -243,7 +241,7 @@ class AugurGUI(QWidget):
 
         # Create input channel text field
         self.channel_text = QLineEdit()
-        self.channel_text.setText("-1")
+        self.channel_text.setText("0")
         layout.addWidget(self.channel_text, 2, 1)
 
         # Make widgets fill cells
@@ -279,7 +277,7 @@ class AugurGUI(QWidget):
         else:
             print("Recording started")
             input_device = self.device_box.currentData()
-            model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pth"
+            model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pt"
             self.recording_process = Process(
                 target=record_and_detect,
                 args=(input_device, self.song_dest, model_path),
@@ -298,7 +296,7 @@ class AugurGUI(QWidget):
             print("Please provide an input folder before filtering for song")
         else:
             try:
-                model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pth"
+                model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pt"
                 self.filtering_process = Process(
                     target=process_folder,
                     args=(

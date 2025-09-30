@@ -19,16 +19,18 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QPushButton,
     QComboBox,
+    QVBoxLayout,
     QFileDialog,
     QLabel,
+    QLineEdit,
 )
-import pyqtgraph
+import pyqtgraph as pg
 
 from augur_main.song_identifier_model import SongIdentifier
 
 
 def record_and_detect(
-    input_device, song_dest, model_path, padding_seconds=5, rate=22050
+    input_device, song_dest, model_path, padding_seconds=5, rate=22050, channel=-1
 ):
     try:
 
@@ -111,6 +113,7 @@ def process_folder(
     model,
     input_folder,
     output_folder,
+    channel,
     threshold=0.5,
     overlap_windows=True,
     clear=False,
@@ -139,7 +142,11 @@ def process_folder(
         for file in Path(input_folder).glob("*.wav"):
             try:
                 print(f"processing {file.name}")
-                audio, sr = librosa.load(file, sr=22050)
+                if channel == -1:
+                    audio, sr = librosa.load(file, sr=22050)
+                else:
+                    audio, sr = librosa.load(file, sr=22050, mono=False)
+                    audio = audio[channel]
                 if model.classify(
                     audio=audio,
                     threshold=threshold,
@@ -163,7 +170,7 @@ def process_folder(
         print(f"{str(input_folder)} contained no audio files")
 
 
-class RealTimeDetector(QWidget):
+class AugurGUI(QWidget):
     def __init__(self):
         super().__init__()
 
@@ -196,25 +203,27 @@ class RealTimeDetector(QWidget):
         self.ifolder_button.clicked.connect(self._choose_folder)
         self.ofolder_button.clicked.connect(self._choose_folder)
         layout.addWidget(self.ifolder_button, 1, 1)
-        layout.addWidget(self.ofolder_button, 2, 1)
-        layout.addWidget(self.filter_button, 3, 0, 1, 2)
+        layout.addWidget(self.ofolder_button, 3, 1)
+        layout.addWidget(self.filter_button, 4, 0, 1, 2)
         font = self.filter_button.font()
         font.setBold(True)
         self.filter_button.setFont(font)
-        layout.addWidget(self.start_button, 6, 0)
-        layout.addWidget(self.stop_button, 6, 1)
+        layout.addWidget(self.start_button, 7, 0)
+        layout.addWidget(self.stop_button, 7, 1)
 
         # Create labels
-        self.folders_label = QLabel("Input/output folder paths", self)
+        self.folders_label = QLabel("Input/output locations", self)
         self.recording_label = QLabel("Filter song during live recording", self)
         self.ifolder_label = QLabel("No input folder selected:", self)
+        self.channel_label = QLabel("Input channel:")
         self.ofolder_label = QLabel("No output folder selected:", self)
         self.device_label = QLabel("Select input device:", self)
         layout.addWidget(self.folders_label, 0, 0, 1, 2)
-        layout.addWidget(self.recording_label, 4, 0, 1, 2)
+        layout.addWidget(self.recording_label, 5, 0, 1, 2)
         layout.addWidget(self.ifolder_label, 1, 0)
-        layout.addWidget(self.ofolder_label, 2, 0)
-        layout.addWidget(self.device_label, 5, 0)
+        layout.addWidget(self.channel_label, 2, 0)
+        layout.addWidget(self.ofolder_label, 3, 0)
+        layout.addWidget(self.device_label, 6, 0)
         font = self.folders_label.font()
         font.setBold(True)
         self.folders_label.setFont(font)
@@ -230,12 +239,17 @@ class RealTimeDetector(QWidget):
         if self.device_box.count() == 0:
             self.device_box.setCurrentText("No input device found...")
             self.start_button.setDisabled(True)
-        layout.addWidget(self.device_box, 5, 1)
+        layout.addWidget(self.device_box, 6, 1)
+
+        # Create input channel text field
+        self.channel_text = QLineEdit()
+        self.channel_text.setText("-1")
+        layout.addWidget(self.channel_text, 2, 1)
 
         # Make widgets fill cells
         for i in range(2):
             layout.setColumnStretch(i, 1)
-        for i in range(7):
+        for i in range(8):
             layout.setRowStretch(i, 1)
 
         for widget in [
@@ -251,6 +265,8 @@ class RealTimeDetector(QWidget):
             self.ofolder_label,
         ]:
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        self.channel_text.clearFocus()
 
     def _start_recording(self):
         if (
@@ -281,12 +297,22 @@ class RealTimeDetector(QWidget):
         if self.song_loc is None:
             print("Please provide an input folder before filtering for song")
         else:
-            model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pth"
-            self.filtering_process = Process(
-                target=process_folder,
-                args=(model_path, self.song_loc, self.song_dest),
-            )
-            self.filtering_process.start()
+            try:
+                model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pth"
+                self.filtering_process = Process(
+                    target=process_folder,
+                    args=(
+                        model_path,
+                        self.song_loc,
+                        self.song_dest,
+                        int(self.channel_text.text()),
+                    ),
+                )
+                self.filtering_process.start()
+            except:
+                print(
+                    "Please make sure you have correctly specified the input folder and channel..."
+                )
 
     def _stop_recording(self):
         try:
@@ -295,9 +321,6 @@ class RealTimeDetector(QWidget):
             print("Recording ended")
         except AttributeError:
             print("Please start the recording before ending it...")
-
-    def _plot_audio(self):
-        print("test")
 
     def _choose_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select folder")
@@ -310,9 +333,21 @@ class RealTimeDetector(QWidget):
                 self.ofolder_label.setText(f"Save to: {folder}")
 
 
+class RecordingWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        # Set up the window
+        self.setWindowTitle(" GUI")
+        width, height = get_monitors()[0].width // 2, get_monitors()[0].height // 3
+        layout = QVBoxLayout(self)
+
+        self.plot_widget = pg.PlotWidget()
+
+
 def main():
     app = QApplication(sys.argv)
-    window = RealTimeDetector()
+    window = AugurGUI()
     window.show()
     app.exec()
     sys.exit()

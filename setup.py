@@ -4,6 +4,10 @@ setup(
     name="augur",
     version="0.1",
     packages=find_packages(),
+    include_package_data=True,
+    package_data={
+        "augur": ["model_2.2_0.995.pt"],
+    },
     install_requires=[
         "audioread==3.0.1",
         "certifi==2025.1.31",

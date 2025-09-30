@@ -1,0 +1,2 @@
+[console_scripts]
+augur = augur_main.augur_gui:main
