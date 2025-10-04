@@ -18,8 +18,8 @@ def generate_spectrogram(wav, sr=22050):
         y=wav, n_fft=512, hop_length=int((sr // 2) / 128)
     )
     mels = librosa.amplitude_to_db(mels)
-    mels = mels + 80.0
-    mels = mels / -80.0
+    mels += 80.0
+    mels /= -80.0
     mels = torch.from_numpy(mels)
     return mels
 
