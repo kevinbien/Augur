@@ -6,7 +6,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        "augur": ["model_2.2_0.995.pt"],
+        "augur_main": ["model_2.4_0.991.pt"],
     },
     install_requires=[
         "audioread==3.0.1",

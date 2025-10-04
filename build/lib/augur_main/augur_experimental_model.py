@@ -93,15 +93,15 @@ class SongIdentifier(nn.Module):
         return torch.reshape(self.model(data), (-1,))
 
     def classify(
-            self,
-            audio,
-            threshold=0.5,
-            numeric_predictions=False,
-            sample_rate=22050,
-            overlap_windows=False,
+        self,
+        audio,
+        threshold=0.5,
+        numeric_predictions=False,
+        sample_rate=22050,
+        overlap_windows=False,
     ):
         assert (
-                len(audio) >= sample_rate // 2
+            len(audio) >= sample_rate // 2
         ), "Cannot classify audio segments less than 0.5s..."
         if len(audio) > sample_rate // 2:
             has_song = False
@@ -116,12 +116,12 @@ class SongIdentifier(nn.Module):
             for i in range(windows):
                 if overlap_windows:
                     window = rounded_audio[
-                             (i * sample_rate) // 4: ((i + 2) * sample_rate) // 4
-                             ]
+                        (i * sample_rate) // 4 : ((i + 2) * sample_rate) // 4
+                    ]
                 else:
                     window = rounded_audio[
-                             (i * sample_rate) // 2: ((i + 1) * sample_rate) // 2
-                             ]
+                        (i * sample_rate) // 2 : ((i + 1) * sample_rate) // 2
+                    ]
                 mels = torch.unsqueeze(generate_spectrogram(window, sr=sample_rate), 0)
                 pred = self.forward(mels).item()
                 preds.append(pred)
@@ -189,7 +189,13 @@ def eval_loop(val_dataloader, model, loss_fn):
 
 
 def train_model(
-        model, dataset, model_dest=None, return_loss=True, batch_size=128, epochs=15, regularize=True
+    model,
+    dataset,
+    model_dest=None,
+    return_loss=True,
+    batch_size=128,
+    epochs=15,
+    regularize=True,
 ):
     loss_fn = nn.BCELoss()
     best_vloss = 1000000000

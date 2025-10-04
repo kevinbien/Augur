@@ -26,11 +26,16 @@ from PySide6.QtWidgets import (
 )
 import pyqtgraph as pg
 
-from augur_main.song_identifier_model import SongIdentifier
+from augur_main.augur_model import SongIdentifier
 
 
 def record_and_detect(
-    input_device, song_dest, model_path, padding_seconds=5, rate=22050, channel=-1
+    input_device,
+    song_dest,
+    model_path,
+    threshold,
+    padding_seconds=5,
+    rate=22050,
 ):
     try:
 
@@ -69,7 +74,7 @@ def record_and_detect(
             chunk = stream.read((rate // 2))
             chunks.append(chunk)
             # If the segment contains song, set has_song to true and set counter to padding_seconds * 2.
-            if model.classify(chunk):
+            if model.classify(chunk, threshold=threshold):
                 if not has_song:
                     has_song = True
                     found_songs += 1
@@ -114,7 +119,7 @@ def process_folder(
     input_folder,
     output_folder,
     channel,
-    threshold=0.5,
+    threshold,
     overlap_windows=True,
     clear=False,
 ):
@@ -129,7 +134,7 @@ def process_folder(
     subdirs = [file for file in Path(input_folder).iterdir() if file.is_dir()]
     if len(subdirs) > 0:
         for subdir in subdirs:
-            process_folder(model, subdir, output_folder, channel)
+            process_folder(model, subdir, output_folder, channel, threshold)
     if any(Path(input_folder).glob("*.wav")):
         if local_output.exists():
             for file in local_output.glob("*.wav"):
@@ -200,32 +205,38 @@ class AugurGUI(QWidget):
         self.filter_button.clicked.connect(self._filter_song)
         self.ifolder_button.clicked.connect(self._choose_folder)
         self.ofolder_button.clicked.connect(self._choose_folder)
-        layout.addWidget(self.ifolder_button, 1, 1)
-        layout.addWidget(self.ofolder_button, 3, 1)
-        layout.addWidget(self.filter_button, 4, 0, 1, 2)
+        layout.addWidget(self.ifolder_button, 4, 1)
+        layout.addWidget(self.ofolder_button, 5, 1)
+        layout.addWidget(self.filter_button, 6, 0, 1, 2)
         font = self.filter_button.font()
         font.setBold(True)
         self.filter_button.setFont(font)
-        layout.addWidget(self.start_button, 7, 0)
-        layout.addWidget(self.stop_button, 7, 1)
+        layout.addWidget(self.start_button, 9, 0)
+        layout.addWidget(self.stop_button, 9, 1)
 
         # Create labels
+        self.settings_label = QLabel("Classification settings", self)
+        self.channel_label = QLabel("Input channel:", self)
+        self.threshold_label = QLabel("Threshold:", self)
         self.folders_label = QLabel("Input/output locations", self)
         self.recording_label = QLabel("Filter song during live recording", self)
         self.ifolder_label = QLabel("No input folder selected:", self)
-        self.channel_label = QLabel("Input channel:")
         self.ofolder_label = QLabel("No output folder selected:", self)
         self.device_label = QLabel("Select input device:", self)
-        layout.addWidget(self.folders_label, 0, 0, 1, 2)
-        layout.addWidget(self.recording_label, 5, 0, 1, 2)
-        layout.addWidget(self.ifolder_label, 1, 0)
-        layout.addWidget(self.channel_label, 2, 0)
-        layout.addWidget(self.ofolder_label, 3, 0)
-        layout.addWidget(self.device_label, 6, 0)
+        layout.addWidget(self.settings_label, 0, 0, 1, 2)
+        layout.addWidget(self.channel_label, 1, 0)
+        layout.addWidget(self.threshold_label, 2, 0)
+        layout.addWidget(self.folders_label, 3, 0, 1, 2)
+        layout.addWidget(self.ifolder_label, 4, 0)
+        layout.addWidget(self.ofolder_label, 5, 0)
+        layout.addWidget(self.recording_label, 7, 0, 1, 2)
+        layout.addWidget(self.device_label, 8, 0)
         font = self.folders_label.font()
         font.setBold(True)
+        self.settings_label.setFont(font)
         self.folders_label.setFont(font)
         self.recording_label.setFont(font)
+        self.settings_label.setAlignment(Qt.AlignCenter)
         self.folders_label.setAlignment(Qt.AlignCenter)
         self.recording_label.setAlignment(Qt.AlignCenter)
 
@@ -237,20 +248,24 @@ class AugurGUI(QWidget):
         if self.device_box.count() == 0:
             self.device_box.setCurrentText("No input device found...")
             self.start_button.setDisabled(True)
-        layout.addWidget(self.device_box, 6, 1)
+        layout.addWidget(self.device_box, 8, 1)
 
-        # Create input channel text field
+        # Create text fields
         self.channel_text = QLineEdit()
+        self.threshold_text = QLineEdit()
         self.channel_text.setText("0")
-        layout.addWidget(self.channel_text, 2, 1)
+        self.threshold_text.setText("0.5")
+        layout.addWidget(self.channel_text, 1, 1)
+        layout.addWidget(self.threshold_text, 2, 1)
 
         # Make widgets fill cells
         for i in range(2):
             layout.setColumnStretch(i, 1)
-        for i in range(8):
-            layout.setRowStretch(i, 1)
 
         for widget in [
+            self.settings_label,
+            self.threshold_label,
+            self.channel_label,
             self.folders_label,
             self.start_button,
             self.stop_button,
@@ -277,10 +292,15 @@ class AugurGUI(QWidget):
         else:
             print("Recording started")
             input_device = self.device_box.currentData()
-            model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pt"
+            model_path = Path(__file__).resolve().parent / "model_2.4_0.991.pt"
             self.recording_process = Process(
                 target=record_and_detect,
-                args=(input_device, self.song_dest, model_path),
+                args=(
+                    input_device,
+                    self.song_dest,
+                    model_path,
+                    float(self.threshold_text.text()),
+                ),
             )
             self.recording_process.start()
 
@@ -296,7 +316,7 @@ class AugurGUI(QWidget):
             print("Please provide an input folder before filtering for song")
         else:
             try:
-                model_path = Path(__file__).resolve().parent / "model_2.2_0.995.pt"
+                model_path = Path(__file__).resolve().parent / "model_2.4_0.991.pt"
                 self.filtering_process = Process(
                     target=process_folder,
                     args=(
@@ -304,12 +324,13 @@ class AugurGUI(QWidget):
                         self.song_loc,
                         self.song_dest,
                         int(self.channel_text.text()),
+                        float(self.threshold_text.text()),
                     ),
                 )
                 self.filtering_process.start()
             except:
                 print(
-                    "Please make sure you have correctly specified the input folder and channel..."
+                    "Please make sure you have correctly specified the input folder..."
                 )
 
     def _stop_recording(self):

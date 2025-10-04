@@ -18,8 +18,8 @@ def generate_spectrogram(wav, sr=22050):
         y=wav, n_fft=512, hop_length=int((sr // 2) / 128)
     )
     mels = librosa.amplitude_to_db(mels)
-    mels -= np.mean(mels)
-    mels /= np.std(mels)
+    mels = mels + 80.0
+    mels = mels / -80.0
     mels = torch.from_numpy(mels)
     return mels
 
@@ -40,7 +40,7 @@ class SongIdentifier(nn.Module):
         self.kernel_2_size = 3
         self.conv_3_out_channels = 1
         self.kernel_3_size = 1
-        self.dropout = 0.16
+        self.dropout = 0.15
         self.dense_size = 128
 
         # model architecture
@@ -51,7 +51,7 @@ class SongIdentifier(nn.Module):
                 kernel_size=self.kernel_1_size,
                 padding="same",
             ),
-            nn.MaxPool2d(2),
+            nn.MaxPool2d((4, 1), (4, 1)),
             nn.LeakyReLU(),
             nn.Conv2d(
                 in_channels=self.conv_1_out_channels,
@@ -59,7 +59,7 @@ class SongIdentifier(nn.Module):
                 kernel_size=self.kernel_2_size,
                 padding="same",
             ),
-            nn.MaxPool2d(2),
+            nn.MaxPool2d((2, 1), (2, 1)),
             nn.LeakyReLU(),
             nn.Conv2d(
                 in_channels=self.conv_2_out_channels,
@@ -67,7 +67,13 @@ class SongIdentifier(nn.Module):
                 kernel_size=self.kernel_3_size,
                 padding="same",
             ),
-            nn.MaxPool2d(2),
+            nn.Flatten(1, 2),
+            nn.Conv1d(
+                in_channels=16,
+                out_channels=16,
+                kernel_size=8,
+                stride=8,
+            ),
             nn.LeakyReLU(),
             nn.Flatten(),
             nn.Dropout(self.dropout),
@@ -154,7 +160,7 @@ class SongIdentifierDataset(Dataset):
         return mels, label
 
 
-def train_loop(dataloader, optimizer, model, loss_fn):
+def train_loop(dataloader, optimizer, model, loss_fn, regularize):
     model.train(True)
     running_loss = 0
     for batch, (data, targets) in enumerate(dataloader):
@@ -162,6 +168,8 @@ def train_loop(dataloader, optimizer, model, loss_fn):
         preds = model(data)
         targets = targets.to(torch.float32)
         loss = loss_fn(preds, targets)
+        if regularize is True:
+            loss += math.sqrt(sum(p.pow(2).sum() for p in model.parameters()))
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
@@ -181,7 +189,13 @@ def eval_loop(val_dataloader, model, loss_fn):
 
 
 def train_model(
-    model, dataset, model_dest=None, return_loss=True, batch_size=128, epochs=15
+    model,
+    dataset,
+    model_dest=None,
+    return_loss=True,
+    batch_size=128,
+    epochs=15,
+    regularize=True,
 ):
     loss_fn = nn.BCELoss()
     best_vloss = 1000000000
@@ -196,7 +210,7 @@ def train_model(
     )
     for epoch in range(epochs):
         print(f"\n  Epoch {epoch + 1}\n  -------------------------------")
-        avg_loss = train_loop(train_dataloader, optimizer, model, loss_fn)
+        avg_loss = train_loop(train_dataloader, optimizer, model, loss_fn, regularize)
         avg_vloss, vloss_sem = eval_loop(val_dataloader, model, loss_fn)
         print(f"  LOSS train {avg_loss} valid {avg_vloss}")
         if avg_vloss < best_vloss:
