@@ -106,11 +106,11 @@ class SongIdentifier(nn.Module):
         if len(audio) > sample_rate // 2:
             has_song = False
             preds = []
-            rounded_seconds = (len(audio) // sample_rate) + 1
+            rounded_seconds = (len(audio) // sample_rate) + 0.5
             rounded_audio = librosa.util.fix_length(
-                audio, size=rounded_seconds * sample_rate
+                audio, size=int(rounded_seconds * sample_rate)
             )
-            windows = rounded_seconds
+            windows = int(rounded_seconds * 2)
             if overlap_windows:
                 windows = windows * 2 - 1
             for i in range(windows):
