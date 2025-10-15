@@ -130,11 +130,13 @@ def process_folder(
         m.eval()
         model = m
         print("Model loaded!")
-    local_output = Path(input_folder) / "Found song"
+    local_output = f"Found Song ({threshold})"
+    local_output = Path(input_folder) / local_output
     subdirs = [file for file in Path(input_folder).iterdir() if file.is_dir()]
     if len(subdirs) > 0:
         for subdir in subdirs:
-            process_folder(model, subdir, output_folder, channel, threshold)
+            if not "Found Song" in subdir.name:
+                process_folder(model, subdir, output_folder, channel, threshold)
     if any(Path(input_folder).glob("*.wav")):
         if local_output.exists():
             for file in local_output.glob("*.wav"):
