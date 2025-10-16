@@ -8,4 +8,3 @@ augur.egg-info/top_level.txt
 augur_main/__init__.py
 augur_main/augur_gui.py
 augur_main/augur_model.py
-augur_main/model_2.4_0.991.pt

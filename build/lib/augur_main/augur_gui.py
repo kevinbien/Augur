@@ -130,11 +130,13 @@ def process_folder(
         m.eval()
         model = m
         print("Model loaded!")
-    local_output = Path(input_folder) / "Found song"
+    local_output = f"Found Song ({threshold})"
+    local_output = Path(input_folder) / local_output
     subdirs = [file for file in Path(input_folder).iterdir() if file.is_dir()]
     if len(subdirs) > 0:
         for subdir in subdirs:
-            process_folder(model, subdir, output_folder, channel, threshold)
+            if not "Found Song" in subdir.name:
+                process_folder(model, subdir, output_folder, channel, threshold)
     if any(Path(input_folder).glob("*.wav")):
         if local_output.exists():
             for file in local_output.glob("*.wav"):
@@ -292,7 +294,7 @@ class AugurGUI(QWidget):
         else:
             print("Recording started")
             input_device = self.device_box.currentData()
-            model_path = Path(__file__).resolve().parent / "model_2.4_0.991.pt"
+            model_path = Path(__file__).resolve().parent / "model_0.8_0.991.pt"
             self.recording_process = Process(
                 target=record_and_detect,
                 args=(
@@ -316,7 +318,7 @@ class AugurGUI(QWidget):
             print("Please provide an input folder before filtering for song")
         else:
             try:
-                model_path = Path(__file__).resolve().parent / "model_2.4_0.991.pt"
+                model_path = Path(__file__).resolve().parent / "model_0.8_0.991.pt"
                 self.filtering_process = Process(
                     target=process_folder,
                     args=(

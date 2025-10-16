@@ -10,18 +10,34 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 
 
-# preprocessing function
+# preprocessing functions
 def generate_spectrogram(wav, sr=22050):
     if isinstance(wav, str) or isinstance(wav, Path):
         wav, _ = librosa.load(wav)
     mels = librosa.feature.melspectrogram(
-        y=wav, n_fft=512, hop_length=int((sr // 2) / 128)
+        y=wav, n_fft=512, hop_length=int((sr // 2) / 128), fmin=500, fmax=10000
     )
     mels = librosa.amplitude_to_db(mels)
-    mels = mels + 80.0
-    mels = mels / -80.0
+    mels += 80.0
+    mels /= -80.0
     mels = torch.from_numpy(mels)
     return mels
+
+
+def random_gain(mels, min_db=-12, max_db=6):
+    g = float(np.random.uniform(min_db, max_db))
+    mels *= 10.0 ** (g / 20.0)
+    return mels
+
+
+def random_noise(mels, min_snr=5, max_snr=20):
+    mels = mels.float()
+    snr = float(np.random.uniform(min_snr, max_snr))
+    rms = torch.sqrt(torch.mean(mels ** 2))
+    noise = torch.randn_like(mels, device=mels.device)
+    noise /= torch.sqrt(torch.mean(noise ** 2))
+    noise *= rms / (10 ** (snr / 20))
+    return mels + noise
 
 
 class SongIdentifier(nn.Module):
@@ -33,54 +49,45 @@ class SongIdentifier(nn.Module):
         self.to(self.device)
         print(f"Using {self.device}")
 
-        # hyperparameters
-        self.conv_1_out_channels = 16
-        self.kernel_1_size = 5
-        self.conv_2_out_channels = 32
-        self.kernel_2_size = 3
-        self.conv_3_out_channels = 1
-        self.kernel_3_size = 1
-        self.dropout = 0.15
-        self.dense_size = 128
-
         # model architecture
         self.model = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
-                out_channels=self.conv_1_out_channels,
-                kernel_size=self.kernel_1_size,
-                padding="same",
-            ),
-            nn.MaxPool2d((4, 1), (4, 1)),
-            nn.LeakyReLU(),
-            nn.Conv2d(
-                in_channels=self.conv_1_out_channels,
-                out_channels=self.conv_2_out_channels,
-                kernel_size=self.kernel_2_size,
-                padding="same",
-            ),
-            nn.MaxPool2d((2, 1), (2, 1)),
-            nn.LeakyReLU(),
-            nn.Conv2d(
-                in_channels=self.conv_2_out_channels,
-                out_channels=self.conv_3_out_channels,
-                kernel_size=self.kernel_3_size,
-                padding="same",
-            ),
-            nn.Flatten(1, 2),
-            nn.Conv1d(
-                in_channels=16,
                 out_channels=16,
-                kernel_size=8,
-                stride=8,
+                kernel_size=(5, 5),
+                padding="same",
             ),
+            nn.BatchNorm2d(16),
             nn.LeakyReLU(),
+            nn.MaxPool2d((4, 1), (4, 1)),
+            nn.Conv2d(
+                in_channels=16,
+                out_channels=32,
+                kernel_size=(3, 3),
+                padding="same",
+            ),
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(),
+            nn.MaxPool2d((2, 1), (2, 1)),
+            nn.Conv2d(
+                in_channels=32,
+                out_channels=32,
+                kernel_size=(5, 1),
+                padding="same",
+                groups=32,
+            ),
+            nn.Conv2d(
+                in_channels=32,
+                out_channels=32,
+                kernel_size=1,
+                padding="same",
+            ),
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(),
+            nn.MaxPool2d((1, 4), (1, 4)),
             nn.Flatten(),
-            nn.Dropout(self.dropout),
-            nn.Linear(self.conv_3_out_channels * 16 * 16, self.dense_size),
-            nn.LeakyReLU(),
-            nn.Dropout(self.dropout),
-            nn.Linear(self.dense_size, 1),
+            nn.Dropout(0.15),
+            nn.Linear(32 * 16 * 32, 1),
             nn.Sigmoid(),
         )
 
@@ -93,35 +100,35 @@ class SongIdentifier(nn.Module):
         return torch.reshape(self.model(data), (-1,))
 
     def classify(
-        self,
-        audio,
-        threshold=0.5,
-        numeric_predictions=False,
-        sample_rate=22050,
-        overlap_windows=False,
+            self,
+            audio,
+            threshold=0.5,
+            numeric_predictions=False,
+            sample_rate=22050,
+            overlap_windows=False,
     ):
         assert (
-            len(audio) >= sample_rate // 2
+                len(audio) >= sample_rate // 2
         ), "Cannot classify audio segments less than 0.5s..."
         if len(audio) > sample_rate // 2:
             has_song = False
             preds = []
-            rounded_seconds = (len(audio) // sample_rate) + 0.5
+            rounded_seconds = (len(audio) // sample_rate) + 1
             rounded_audio = librosa.util.fix_length(
-                audio, size=int(rounded_seconds * sample_rate)
+                audio, size=rounded_seconds * sample_rate
             )
-            windows = int(rounded_seconds * 2)
+            windows = rounded_seconds
             if overlap_windows:
                 windows = windows * 2 - 1
             for i in range(windows):
                 if overlap_windows:
                     window = rounded_audio[
-                        (i * sample_rate) // 4 : ((i + 2) * sample_rate) // 4
-                    ]
+                             (i * sample_rate) // 4: ((i + 2) * sample_rate) // 4
+                             ]
                 else:
                     window = rounded_audio[
-                        (i * sample_rate) // 2 : ((i + 1) * sample_rate) // 2
-                    ]
+                             (i * sample_rate) // 2: ((i + 1) * sample_rate) // 2
+                             ]
                 mels = torch.unsqueeze(generate_spectrogram(window, sr=sample_rate), 0)
                 pred = self.forward(mels).item()
                 preds.append(pred)
@@ -143,6 +150,9 @@ class SongIdentifier(nn.Module):
 
 class SongIdentifierDataset(Dataset):
     def __init__(self, annotations_file, h5py_dataset=None):
+        self.device = (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
         self.labels = pd.read_csv(annotations_file)
         self.h5py_dataset = h5py_dataset
 
@@ -154,13 +164,17 @@ class SongIdentifierDataset(Dataset):
         path = self.labels.iloc[index, 0]
         label = self.labels.iloc[index, 1]
         if self.h5py_dataset is not None:
-            mels = np.array(self.h5py_dataset[path])
+            mels = torch.from_numpy(np.array(self.h5py_dataset[path])).to(self.device)
         else:
             mels = generate_spectrogram(path)
+        if np.random.rand() < 0.33:
+            mels = random_gain(mels)
+        if np.random.rand() < 0.33:
+            mels = random_noise(mels)
         return mels, label
 
 
-def train_loop(dataloader, optimizer, model, loss_fn, regularize):
+def train_loop(dataloader, optimizer, model, loss_fn):
     model.train(True)
     running_loss = 0
     for batch, (data, targets) in enumerate(dataloader):
@@ -168,8 +182,6 @@ def train_loop(dataloader, optimizer, model, loss_fn, regularize):
         preds = model(data)
         targets = targets.to(torch.float32)
         loss = loss_fn(preds, targets)
-        if regularize is True:
-            loss += math.sqrt(sum(p.pow(2).sum() for p in model.parameters()))
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
@@ -189,18 +201,13 @@ def eval_loop(val_dataloader, model, loss_fn):
 
 
 def train_model(
-    model,
-    dataset,
-    model_dest=None,
-    return_loss=True,
-    batch_size=128,
-    epochs=15,
-    regularize=True,
+        model, dataset, model_dest=None, return_loss=True, batch_size=128, epochs=15
 ):
     loss_fn = nn.BCELoss()
     best_vloss = 1000000000
     best_vloss_sem = 0
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.Adam(model.parameters(), weight_decay=1e-5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, factor=0.5)
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [0.8, 0.2])
     train_dataloader = DataLoader(
         dataset=train_dataset, batch_size=batch_size, shuffle=True
@@ -210,8 +217,9 @@ def train_model(
     )
     for epoch in range(epochs):
         print(f"\n  Epoch {epoch + 1}\n  -------------------------------")
-        avg_loss = train_loop(train_dataloader, optimizer, model, loss_fn, regularize)
+        avg_loss = train_loop(train_dataloader, optimizer, model, loss_fn)
         avg_vloss, vloss_sem = eval_loop(val_dataloader, model, loss_fn)
+        scheduler.step(avg_vloss)
         print(f"  LOSS train {avg_loss} valid {avg_vloss}")
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
