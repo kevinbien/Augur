@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 )
 import pyqtgraph as pg
 
-from augur_main.augur_model import SongIdentifier
+from augur_main.augur_model import AugurModel
 
 
 def record_and_detect(
@@ -50,7 +50,7 @@ def record_and_detect(
 
         # Load model
         print("Loading model...")
-        model = SongIdentifier()
+        model = AugurModel()
         model.load_state_dict(torch.load(model_path, weights_only=True))
         model.eval()
         print("Model loaded!")
@@ -123,9 +123,9 @@ def process_folder(
     overlap_windows=True,
     clear=False,
 ):
-    if not isinstance(model, SongIdentifier):
+    if not isinstance(model, AugurModel):
         print("Loading model...")
-        m = SongIdentifier()
+        m = AugurModel()
         m.load_state_dict(torch.load(model, weights_only=True))
         m.eval()
         model = m
