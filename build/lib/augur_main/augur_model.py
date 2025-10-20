@@ -15,32 +15,20 @@ def generate_spectrogram(wav, sr=22050):
     if isinstance(wav, str) or isinstance(wav, Path):
         wav, _ = librosa.load(wav)
     mels = librosa.feature.melspectrogram(
-        y=wav, n_fft=512, hop_length=int((sr // 2) / 128), fmin=500, fmax=10000
+        y=wav,
+        n_fft=512,
+        hop_length=int((sr // 2) / 128),
+        fmin=300,
+        fmax=10000,
     )
     mels = librosa.amplitude_to_db(mels)
     mels += 80.0
-    mels /= -80.0
+    mels /= 80.0
     mels = torch.from_numpy(mels)
     return mels
 
 
-def random_gain(mels, min_db=-12, max_db=6):
-    g = float(np.random.uniform(min_db, max_db))
-    mels *= 10.0 ** (g / 20.0)
-    return mels
-
-
-def random_noise(mels, min_snr=5, max_snr=20):
-    mels = mels.float()
-    snr = float(np.random.uniform(min_snr, max_snr))
-    rms = torch.sqrt(torch.mean(mels ** 2))
-    noise = torch.randn_like(mels, device=mels.device)
-    noise /= torch.sqrt(torch.mean(noise ** 2))
-    noise *= rms / (10 ** (snr / 20))
-    return mels + noise
-
-
-class SongIdentifier(nn.Module):
+class AugurModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.device = (
@@ -53,17 +41,8 @@ class SongIdentifier(nn.Module):
         self.model = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
-                out_channels=16,
-                kernel_size=(5, 5),
-                padding="same",
-            ),
-            nn.BatchNorm2d(16),
-            nn.LeakyReLU(),
-            nn.MaxPool2d((4, 1), (4, 1)),
-            nn.Conv2d(
-                in_channels=16,
                 out_channels=32,
-                kernel_size=(3, 3),
+                kernel_size=(5, 9),
                 padding="same",
             ),
             nn.BatchNorm2d(32),
@@ -71,46 +50,47 @@ class SongIdentifier(nn.Module):
             nn.MaxPool2d((2, 1), (2, 1)),
             nn.Conv2d(
                 in_channels=32,
-                out_channels=32,
-                kernel_size=(5, 1),
+                out_channels=64,
+                kernel_size=(3, 7),
                 padding="same",
-                groups=32,
             ),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(),
+            nn.MaxPool2d((2, 1), (2, 1)),
             nn.Conv2d(
-                in_channels=32,
+                in_channels=64,
                 out_channels=32,
-                kernel_size=1,
+                kernel_size=(1, 9),
                 padding="same",
             ),
             nn.BatchNorm2d(32),
             nn.LeakyReLU(),
             nn.MaxPool2d((1, 4), (1, 4)),
             nn.Flatten(),
-            nn.Dropout(0.15),
-            nn.Linear(32 * 16 * 32, 1),
-            nn.Sigmoid(),
+            nn.Dropout(0.10),
+            nn.Linear(32 * 32 * 64, 1),
         )
 
         self.num_params = sum(p.numel() for p in self.parameters())
 
-    # feeds a batch of 128 by 129 pixel mel spectrograms into the model
+    # feeds a batch of 128 by 257 pixel mel spectrograms into the model
     def forward(self, data):
         batch_size = len(data)
-        data = torch.reshape(data, (batch_size, 1, 128, 129))
+        data = torch.reshape(data, (batch_size, 1, 128, 257))
         return torch.reshape(self.model(data), (-1,))
 
     def classify(
-            self,
-            audio,
-            threshold=0.5,
-            numeric_predictions=False,
-            sample_rate=22050,
-            overlap_windows=False,
+        self,
+        audio,
+        threshold=0.5,
+        numeric_predictions=False,
+        sample_rate=22050,
+        overlap_windows=False,
     ):
         assert (
-                len(audio) >= sample_rate // 2
-        ), "Cannot classify audio segments less than 0.5s..."
-        if len(audio) > sample_rate // 2:
+            len(audio) >= sample_rate
+        ), "Cannot classify audio segments less than 1s..."
+        if len(audio) > sample_rate:
             has_song = False
             preds = []
             rounded_seconds = (len(audio) // sample_rate) + 1
@@ -123,14 +103,12 @@ class SongIdentifier(nn.Module):
             for i in range(windows):
                 if overlap_windows:
                     window = rounded_audio[
-                             (i * sample_rate) // 4: ((i + 2) * sample_rate) // 4
-                             ]
+                        (i * sample_rate) // 2 : ((i + 2) * sample_rate) // 2
+                    ]
                 else:
-                    window = rounded_audio[
-                             (i * sample_rate) // 2: ((i + 1) * sample_rate) // 2
-                             ]
+                    window = rounded_audio[i * sample_rate : (i + 1) * sample_rate]
                 mels = torch.unsqueeze(generate_spectrogram(window, sr=sample_rate), 0)
-                pred = self.forward(mels).item()
+                pred = 1 / (1 + np.exp(-self.forward(mels).item()))
                 preds.append(pred)
                 if pred >= threshold:
                     has_song = True
@@ -148,7 +126,7 @@ class SongIdentifier(nn.Module):
             return has_song
 
 
-class SongIdentifierDataset(Dataset):
+class AugurDataset(Dataset):
     def __init__(self, annotations_file, h5py_dataset=None):
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -167,10 +145,6 @@ class SongIdentifierDataset(Dataset):
             mels = torch.from_numpy(np.array(self.h5py_dataset[path])).to(self.device)
         else:
             mels = generate_spectrogram(path)
-        if np.random.rand() < 0.33:
-            mels = random_gain(mels)
-        if np.random.rand() < 0.33:
-            mels = random_noise(mels)
         return mels, label
 
 
@@ -201,13 +175,15 @@ def eval_loop(val_dataloader, model, loss_fn):
 
 
 def train_model(
-        model, dataset, model_dest=None, return_loss=True, batch_size=128, epochs=15
+    model, dataset, model_dest=None, return_loss=True, batch_size=128, epochs=15
 ):
     loss_fn = nn.BCELoss()
     best_vloss = 1000000000
     best_vloss_sem = 0
     optimizer = torch.optim.Adam(model.parameters(), weight_decay=1e-5)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, factor=0.5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, patience=3, factor=0.5
+    )
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [0.8, 0.2])
     train_dataloader = DataLoader(
         dataset=train_dataset, batch_size=batch_size, shuffle=True

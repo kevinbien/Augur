@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 )
 import pyqtgraph as pg
 
-from augur_main.augur_model import SongIdentifier
+from augur_main.augur_model import AugurModel
 
 
 def record_and_detect(
@@ -50,7 +50,7 @@ def record_and_detect(
 
         # Load model
         print("Loading model...")
-        model = SongIdentifier()
+        model = AugurModel()
         model.load_state_dict(torch.load(model_path, weights_only=True))
         model.eval()
         print("Model loaded!")
@@ -123,9 +123,9 @@ def process_folder(
     overlap_windows=True,
     clear=False,
 ):
-    if not isinstance(model, SongIdentifier):
+    if not isinstance(model, AugurModel):
         print("Loading model...")
-        m = SongIdentifier()
+        m = AugurModel()
         m.load_state_dict(torch.load(model, weights_only=True))
         m.eval()
         model = m
@@ -294,7 +294,7 @@ class AugurGUI(QWidget):
         else:
             print("Recording started")
             input_device = self.device_box.currentData()
-            model_path = Path(__file__).resolve().parent / "model_0.8_0.991.pt"
+            model_path = Path(__file__).resolve().parent / "model_0.9_0.0731.pt"
             self.recording_process = Process(
                 target=record_and_detect,
                 args=(
@@ -318,7 +318,7 @@ class AugurGUI(QWidget):
             print("Please provide an input folder before filtering for song")
         else:
             try:
-                model_path = Path(__file__).resolve().parent / "model_0.8_0.991.pt"
+                model_path = Path(__file__).resolve().parent / "model_0.9_0.0731.pt"
                 self.filtering_process = Process(
                     target=process_folder,
                     args=(

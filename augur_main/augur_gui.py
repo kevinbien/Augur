@@ -294,7 +294,7 @@ class AugurGUI(QWidget):
         else:
             print("Recording started")
             input_device = self.device_box.currentData()
-            model_path = Path(__file__).resolve().parent / "model_0.8_0.991.pt"
+            model_path = Path(__file__).resolve().parent / "model_0.9_0.0731.pt"
             self.recording_process = Process(
                 target=record_and_detect,
                 args=(
@@ -318,7 +318,7 @@ class AugurGUI(QWidget):
             print("Please provide an input folder before filtering for song")
         else:
             try:
-                model_path = Path(__file__).resolve().parent / "model_0.8_0.991.pt"
+                model_path = Path(__file__).resolve().parent / "model_0.9_0.0731.pt"
                 self.filtering_process = Process(
                     target=process_folder,
                     args=(

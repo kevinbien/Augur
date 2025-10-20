@@ -205,7 +205,3 @@ def train_model(
                 torch.save(model.state_dict(), model_path)
     if return_loss:
         return best_vloss, best_vloss_sem
-
-
-if __name__ == "__main__":
-    model = AugurModel()
