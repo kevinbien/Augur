@@ -85,7 +85,7 @@ class AugurModel(nn.Module):
         threshold=0.5,
         numeric_predictions=False,
         sample_rate=22050,
-        overlap_windows=False,
+        overlap_windows=2,
     ):
         assert (
             len(audio) >= sample_rate
@@ -98,15 +98,13 @@ class AugurModel(nn.Module):
                 audio, size=rounded_seconds * sample_rate
             )
             windows = rounded_seconds
-            if overlap_windows:
-                windows = windows * 2 - 1
+            windows = windows * overlap_windows - (overlap_windows - 1)
             for i in range(windows):
-                if overlap_windows:
-                    window = rounded_audio[
-                        (i * sample_rate) // 2 : ((i + 2) * sample_rate) // 2
-                    ]
-                else:
-                    window = rounded_audio[i * sample_rate : (i + 1) * sample_rate]
+                window = rounded_audio[
+                    (i * sample_rate)
+                    // overlap_windows : ((i + overlap_windows) * sample_rate)
+                    // overlap_windows
+                ]
                 mels = torch.unsqueeze(generate_spectrogram(window, sr=sample_rate), 0)
                 pred = 1 / (1 + np.exp(-self.forward(mels).item()))
                 preds.append(pred)
