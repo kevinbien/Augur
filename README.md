@@ -24,8 +24,6 @@ pip install .
 
 to install Augur.
 
-## Usage
-
 After installing the software, the GUI can be run from the terminal. Activate the Augur Conda environment using
 
 ```bash
@@ -37,6 +35,17 @@ and open the GUI by running
 ```bash
 augur
 ```
+
+## Usage
+
+When running Augur, the CNN inputs 1 second windows from a recording and predicts the probability that the given window contains singing.
+
+**Classification settings** are parameters the model uses when making predictions:
+
+- Input channel: the channel read from when processing input recordings
+- Threshold: the probability above which a window is considered to contain song
+- 
+
 
 
 
