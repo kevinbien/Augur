@@ -57,7 +57,7 @@ Internally, the model takes 1 second windows from a recording and outputs the pr
 
 ## Why "Augur"?
 
-[Augury](https://en.wikipedia.org/wiki/Augury) was the ancient practice of divining the future by reading omens from birds. This software can't do that, but machine learning almost feels like magic!
+[Augury](https://en.wikipedia.org/wiki/Augury) was the ancient practice of divining the future by reading omens from birds. This software can't do that, but machine learning can sometimes feel like magic.
 
 
 
