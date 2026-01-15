@@ -10,25 +10,21 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 
 
-# preprocessing functions
-def generate_spectrogram(wav, sr=22050, mu=-33.4126, sigma=11.2896):
+# preprocessing function
+def generate_spectrogram(wav, sr=22050):
     if isinstance(wav, str) or isinstance(wav, Path):
         wav, _ = librosa.load(wav)
     mels = librosa.feature.melspectrogram(
-        y=wav,
-        n_fft=1024,
-        hop_length=int(sr / 128),
-        fmin=300,
-        fmax=10000,
+        y=wav, n_fft=512, hop_length=int((sr // 2) / 128)
     )
-    mels = librosa.power_to_db(mels)
-    mels -= mu
-    mels /= sigma
+    mels = librosa.amplitude_to_db(mels)
+    mels -= np.mean(mels)
+    mels /= np.std(mels)
     mels = torch.from_numpy(mels)
     return mels
 
 
-class AugurModel(nn.Module):
+class SongIdentifier(nn.Module):
     def __init__(self):
         super().__init__()
         self.device = (
@@ -36,126 +32,111 @@ class AugurModel(nn.Module):
         )
         self.to(self.device)
         print(f"Using {self.device}")
-        self.temp = 1.0
+
+        # hyperparameters
+        self.conv_1_out_channels = 16
+        self.kernel_1_size = 5
+        self.conv_2_out_channels = 32
+        self.kernel_2_size = 3
+        self.conv_3_out_channels = 1
+        self.kernel_3_size = 1
+        self.dropout = 0.16
+        self.dense_size = 128
 
         # model architecture
         self.model = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
-                out_channels=32,
-                kernel_size=(9, 9),
+                out_channels=self.conv_1_out_channels,
+                kernel_size=self.kernel_1_size,
                 padding="same",
             ),
-            nn.BatchNorm2d(32),
-            nn.MaxPool2d((4, 4), (4, 4)),
+            nn.MaxPool2d(2),
             nn.LeakyReLU(),
             nn.Conv2d(
-                in_channels=32,
-                out_channels=64,
-                kernel_size=(7, 7),
+                in_channels=self.conv_1_out_channels,
+                out_channels=self.conv_2_out_channels,
+                kernel_size=self.kernel_2_size,
                 padding="same",
             ),
-            nn.BatchNorm2d(64),
+            nn.MaxPool2d(2),
             nn.LeakyReLU(),
             nn.Conv2d(
-                in_channels=64,
-                out_channels=64,
-                kernel_size=(5, 5),
+                in_channels=self.conv_2_out_channels,
+                out_channels=self.conv_3_out_channels,
+                kernel_size=self.kernel_3_size,
                 padding="same",
             ),
-            nn.GroupNorm(8, 64),
-            nn.MaxPool2d((2, 2), (2, 2)),
-            nn.LeakyReLU(),
-            nn.Dropout2d(0.05),
-            nn.Conv2d(
-                in_channels=64,
-                out_channels=64,
-                kernel_size=(3, 3),
-                padding="same",
-                groups=64,
-            ),
-            nn.Conv2d(
-                in_channels=64,
-                out_channels=64,
-                kernel_size=(1, 1),
-                padding="same",
-            ),
-            nn.Dropout2d(0.05),
-            nn.GroupNorm(8, 64),
-            nn.LeakyReLU(),
-            nn.Conv2d(
-                in_channels=64,
-                out_channels=64,
-                kernel_size=(1, 5),
-                padding="same",
-                groups=64,
-            ),
-            nn.Conv2d(
-                in_channels=64,
-                out_channels=32,
-                kernel_size=(1, 1),
-                padding="same",
-            ),
-            nn.GroupNorm(8, 32),
+            nn.MaxPool2d(2),
             nn.LeakyReLU(),
             nn.Flatten(),
-            nn.Dropout(0.10),
-            nn.Linear(32 * 16 * 16, 1),
+            nn.Dropout(self.dropout),
+            nn.Linear(self.conv_3_out_channels * 16 * 16, self.dense_size),
+            nn.LeakyReLU(),
+            nn.Dropout(self.dropout),
+            nn.Linear(self.dense_size, 1),
+            nn.Sigmoid(),
         )
 
         self.num_params = sum(p.numel() for p in self.parameters())
 
     # feeds a batch of 128 by 129 pixel mel spectrograms into the model
-    def forward(self, mels):
-        mels = torch.reshape(mels, (mels.shape[0], 1, 128, 129))
-        return torch.reshape(self.model(mels), (-1,))
+    def forward(self, data):
+        batch_size = len(data)
+        data = torch.reshape(data, (batch_size, 1, 128, 129))
+        return torch.reshape(self.model(data), (-1,))
 
     def classify(
         self,
         audio,
         threshold=0.5,
         numeric_predictions=False,
-        print_predictions=False,
         sample_rate=22050,
-        overlap_windows=2,
+        overlap_windows=False,
     ):
         assert (
-            len(audio) >= sample_rate
-        ), "Cannot classify audio segments less than 1s..."
-        has_song = False
-        preds = []
-        if len(audio) != sample_rate:
-            seconds = (len(audio) // sample_rate) + 1
-            audio = librosa.util.fix_length(audio, size=seconds * sample_rate)
+            len(audio) >= sample_rate // 2
+        ), "Cannot classify audio segments less than 0.5s..."
+        if len(audio) > sample_rate // 2:
+            has_song = False
+            preds = []
+            rounded_seconds = (len(audio) // sample_rate) + 1
+            rounded_audio = librosa.util.fix_length(
+                audio, size=rounded_seconds * sample_rate
+            )
+            windows = rounded_seconds
+            if overlap_windows:
+                windows = windows * 2 - 1
+            for i in range(windows):
+                if overlap_windows:
+                    window = rounded_audio[
+                        (i * sample_rate) // 4 : ((i + 2) * sample_rate) // 4
+                    ]
+                else:
+                    window = rounded_audio[
+                        (i * sample_rate) // 2 : ((i + 1) * sample_rate) // 2
+                    ]
+                mels = torch.unsqueeze(generate_spectrogram(window, sr=sample_rate), 0)
+                pred = self.forward(mels).item()
+                preds.append(pred)
+                if pred >= threshold:
+                    has_song = True
+                    if not numeric_predictions:
+                        return has_song
+            if numeric_predictions:
+                return has_song, preds
+            return has_song
         else:
-            seconds = 1
-        windows = seconds * overlap_windows - (overlap_windows - 1)
-        for i in range(windows):
-            window = audio[
-                (i * sample_rate)
-                // overlap_windows : ((i + overlap_windows) * sample_rate)
-                // overlap_windows
-            ]
-            mels = generate_spectrogram(window, sr=sample_rate)
-            mels = torch.unsqueeze(mels, dim=0)
-            pred = 1 / (1 + np.exp(-self.forward(mels).item()))
-            preds.append(pred)
-            if print_predictions:
-                print(pred)
-            if pred >= threshold:
-                has_song = True
-                if not numeric_predictions:
-                    return has_song
-        if numeric_predictions:
-            return has_song, preds
-        return has_song
+            mels = torch.unsqueeze(generate_spectrogram(audio), 0)
+            pred = self.forward(mels).item()
+            has_song = pred >= threshold
+            if numeric_predictions:
+                return has_song, pred
+            return has_song
 
 
-class AugurDataset(Dataset):
+class SongIdentifierDataset(Dataset):
     def __init__(self, annotations_file, h5py_dataset=None):
-        self.device = (
-            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        )
         self.labels = pd.read_csv(annotations_file)
         self.h5py_dataset = h5py_dataset
 
@@ -167,7 +148,7 @@ class AugurDataset(Dataset):
         path = self.labels.iloc[index, 0]
         label = self.labels.iloc[index, 1]
         if self.h5py_dataset is not None:
-            mels = torch.from_numpy(np.array(self.h5py_dataset[path])).to(self.device)
+            mels = np.array(self.h5py_dataset[path])
         else:
             mels = generate_spectrogram(path)
         return mels, label
@@ -205,10 +186,7 @@ def train_model(
     loss_fn = nn.BCELoss()
     best_vloss = 1000000000
     best_vloss_sem = 0
-    optimizer = torch.optim.Adam(model.parameters(), weight_decay=1e-5)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, patience=3, factor=0.5
-    )
+    optimizer = torch.optim.Adam(model.parameters())
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [0.8, 0.2])
     train_dataloader = DataLoader(
         dataset=train_dataset, batch_size=batch_size, shuffle=True
@@ -220,7 +198,6 @@ def train_model(
         print(f"\n  Epoch {epoch + 1}\n  -------------------------------")
         avg_loss = train_loop(train_dataloader, optimizer, model, loss_fn)
         avg_vloss, vloss_sem = eval_loop(val_dataloader, model, loss_fn)
-        scheduler.step(avg_vloss)
         print(f"  LOSS train {avg_loss} valid {avg_vloss}")
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss

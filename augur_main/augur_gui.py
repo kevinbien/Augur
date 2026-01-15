@@ -209,7 +209,7 @@ class AugurGUI(QWidget):
         super().__init__()
 
         # Set up the window
-        self.setWindowTitle("Augur 0.3")
+        self.setWindowTitle("Augur 0.35")
         width, height = get_monitors()[0].width // 4, get_monitors()[0].height // 3
         self.setGeometry(0, 0, width, height)
 
@@ -329,7 +329,7 @@ class AugurGUI(QWidget):
         else:
             print("Recording started")
             input_device = self.device_box.currentData()
-            model_path = Path(__file__).resolve().parent / "model_0.9_0.0731.pt"
+            model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
             self.recording_process = Process(
                 target=record_and_detect,
                 args=(
@@ -353,7 +353,7 @@ class AugurGUI(QWidget):
             print("Please provide an input folder before filtering for song")
         else:
             try:
-                model_path = Path(__file__).resolve().parent / "model_0.9_0.0731.pt"
+                model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
                 if self.overlap_box.currentText() == r"0% overlap":
                     overlap_windows = 1
                 elif self.overlap_box.currentText() == r"50% overlap":

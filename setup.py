@@ -2,11 +2,11 @@ from setuptools import setup, find_packages
 
 setup(
     name="augur",
-    version="0.3",
+    version="0.35",
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        "augur_main": ["model_0.9_0.0731.pt"],
+        "augur_main": ["model_1.0_0.0346.pt"],
     },
     install_requires=[
         "audioread==3.0.1",
