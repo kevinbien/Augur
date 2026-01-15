@@ -2,7 +2,7 @@
 
 Augur is a Python application for automatic zebra finch song detection. Using a lightweight CNN, it can distinguish zebra finch song from other common noises encountered when recording zebra finches in the lab, without requiring additional training by the user.
 
-*The underlying CNN was trained on recordings from 7 adult zebra finches. Validation data will be presented in a future update. 
+*The underlying CNN was trained on recordings from 7 adult zebra finches. Validation data will be presented in a future update.* 
 
 ## Features
 
