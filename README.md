@@ -8,7 +8,7 @@ Augur is a Python application for automatic zebra finch song detection. Using a 
 
 - Can automatically search folders of recordings for files containing song
 - Can be used to detect and save zebra finch singing in real time
-- Features a GUI for easy usage
+- Includes a GUI for easy use
 
 ## Installation
 
@@ -51,13 +51,13 @@ Internally, the model takes 1 second windows from a recording and outputs the pr
  
 **Input/output locations** are directories that Augur reads from and writes to. Augur processes .wav files from the input directory and all its subdirectories, and copies any file determined to contain song to a local "Found Song" subdirectory, and to the output directory if provided.
 
-**Live detection** can be performed by choose an input device from the drop down menu and pressing "Start recording". After opening the recording, the model will read 0.5s chunks from the input device's stream and output predictions in the terminal. During live recording, any bout of song detected is saved to the output directory along with the 5s of audio preceding and following the bout. 
+**Live detection** can be performed by choosing an input device from the drop down menu and pressing "Start recording". After opening the recording, the model will read 0.5s chunks from the input device's stream and output predictions in the terminal. During live recording, any bout of song detected is saved to the output directory along with the 5s of audio preceding and following the bout. 
 
 *Live detection is still in development and will be updated for performance and usability*
 
 ## Why "Augur"?
 
-[Augury](https://en.wikipedia.org/wiki/Augury) was the ancient practice of divining the future by reading omens from birds. This software can't do that, but machine learning does feel like magic!
+[Augury](https://en.wikipedia.org/wiki/Augury) was the ancient practice of divining the future by reading omens from birds. This software can't do that, but machine learning sometimes feels like magic.
 
 
 
