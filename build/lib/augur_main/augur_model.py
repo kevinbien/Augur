@@ -11,19 +11,19 @@ from torch.utils.data import Dataset, DataLoader
 
 
 # preprocessing functions
-def generate_spectrogram(wav, sr=22050):
+def generate_spectrogram(wav, sr=22050, mu=-33.4126, sigma=11.2896):
     if isinstance(wav, str) or isinstance(wav, Path):
         wav, _ = librosa.load(wav)
     mels = librosa.feature.melspectrogram(
         y=wav,
-        n_fft=512,
-        hop_length=int((sr // 2) / 128),
+        n_fft=1024,
+        hop_length=int(sr / 128),
         fmin=300,
         fmax=10000,
     )
-    mels = librosa.amplitude_to_db(mels)
-    mels += 80.0
-    mels /= 80.0
+    mels = librosa.power_to_db(mels)
+    mels -= mu
+    mels /= sigma
     mels = torch.from_numpy(mels)
     return mels
 
@@ -36,48 +36,79 @@ class AugurModel(nn.Module):
         )
         self.to(self.device)
         print(f"Using {self.device}")
+        self.temp = 1.0
 
         # model architecture
         self.model = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
                 out_channels=32,
-                kernel_size=(5, 9),
+                kernel_size=(9, 9),
                 padding="same",
             ),
             nn.BatchNorm2d(32),
+            nn.MaxPool2d((4, 4), (4, 4)),
             nn.LeakyReLU(),
-            nn.MaxPool2d((2, 1), (2, 1)),
             nn.Conv2d(
                 in_channels=32,
                 out_channels=64,
-                kernel_size=(3, 7),
+                kernel_size=(7, 7),
                 padding="same",
             ),
             nn.BatchNorm2d(64),
             nn.LeakyReLU(),
-            nn.MaxPool2d((2, 1), (2, 1)),
+            nn.Conv2d(
+                in_channels=64,
+                out_channels=64,
+                kernel_size=(5, 5),
+                padding="same",
+            ),
+            nn.GroupNorm(8, 64),
+            nn.MaxPool2d((2, 2), (2, 2)),
+            nn.LeakyReLU(),
+            nn.Dropout2d(0.05),
+            nn.Conv2d(
+                in_channels=64,
+                out_channels=64,
+                kernel_size=(3, 3),
+                padding="same",
+                groups=64,
+            ),
+            nn.Conv2d(
+                in_channels=64,
+                out_channels=64,
+                kernel_size=(1, 1),
+                padding="same",
+            ),
+            nn.Dropout2d(0.05),
+            nn.GroupNorm(8, 64),
+            nn.LeakyReLU(),
+            nn.Conv2d(
+                in_channels=64,
+                out_channels=64,
+                kernel_size=(1, 5),
+                padding="same",
+                groups=64,
+            ),
             nn.Conv2d(
                 in_channels=64,
                 out_channels=32,
-                kernel_size=(1, 9),
+                kernel_size=(1, 1),
                 padding="same",
             ),
-            nn.BatchNorm2d(32),
+            nn.GroupNorm(8, 32),
             nn.LeakyReLU(),
-            nn.MaxPool2d((1, 4), (1, 4)),
             nn.Flatten(),
             nn.Dropout(0.10),
-            nn.Linear(32 * 32 * 64, 1),
+            nn.Linear(32 * 16 * 16, 1),
         )
 
         self.num_params = sum(p.numel() for p in self.parameters())
 
-    # feeds a batch of 128 by 257 pixel mel spectrograms into the model
-    def forward(self, data):
-        batch_size = len(data)
-        data = torch.reshape(data, (batch_size, 1, 128, 257))
-        return torch.reshape(self.model(data), (-1,))
+    # feeds a batch of 128 by 129 pixel mel spectrograms into the model
+    def forward(self, mels):
+        mels = torch.reshape(mels, (mels.shape[0], 1, 128, 129))
+        return torch.reshape(self.model(mels), (-1,))
 
     def classify(
         self,
@@ -91,42 +122,33 @@ class AugurModel(nn.Module):
         assert (
             len(audio) >= sample_rate
         ), "Cannot classify audio segments less than 1s..."
-        if len(audio) > sample_rate:
-            has_song = False
-            preds = []
-            rounded_seconds = (len(audio) // sample_rate) + 1
-            rounded_audio = librosa.util.fix_length(
-                audio, size=rounded_seconds * sample_rate
-            )
-            windows = rounded_seconds
-            windows = windows * overlap_windows - (overlap_windows - 1)
-            for i in range(windows):
-                window = rounded_audio[
-                    (i * sample_rate)
-                    // overlap_windows : ((i + overlap_windows) * sample_rate)
-                    // overlap_windows
-                ]
-                mels = torch.unsqueeze(generate_spectrogram(window, sr=sample_rate), 0)
-                pred = 1 / (1 + np.exp(-self.forward(mels).item()))
-                preds.append(pred)
-                if print_predictions:
-                    print(pred)
-                if pred >= threshold:
-                    has_song = True
-                    if not numeric_predictions:
-                        return has_song
-            if numeric_predictions:
-                return has_song, preds
-            return has_song
+        has_song = False
+        preds = []
+        if len(audio) != sample_rate:
+            seconds = (len(audio) // sample_rate) + 1
+            audio = librosa.util.fix_length(audio, size=seconds * sample_rate)
         else:
-            mels = torch.unsqueeze(generate_spectrogram(audio), 0)
+            seconds = 1
+        windows = seconds * overlap_windows - (overlap_windows - 1)
+        for i in range(windows):
+            window = audio[
+                (i * sample_rate)
+                // overlap_windows : ((i + overlap_windows) * sample_rate)
+                // overlap_windows
+            ]
+            mels = generate_spectrogram(window, sr=sample_rate)
+            mels = torch.unsqueeze(mels, dim=0)
             pred = 1 / (1 + np.exp(-self.forward(mels).item()))
+            preds.append(pred)
             if print_predictions:
                 print(pred)
-            has_song = pred >= threshold
-            if numeric_predictions:
-                return has_song, pred
-            return has_song
+            if pred >= threshold:
+                has_song = True
+                if not numeric_predictions:
+                    return has_song
+        if numeric_predictions:
+            return has_song, preds
+        return has_song
 
 
 class AugurDataset(Dataset):
