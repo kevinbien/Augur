@@ -1,6 +1,6 @@
 # Augur 
 
-Augur is a Python application for automatic zebra finch song detection. Using a lightweight CNN, it can quickly and reliably distinguish zebra finch song from other common noises encountered when recording zebra finches in the lab, no pretraining required.
+Augur is a Python application for automatic zebra finch song detection. Using a lightweight CNN, it can quickly and reliably distinguish zebra finch song from other common noises encountered when recording zebra finches in the lab, no additional training required.
 
 ## Features
 
@@ -23,6 +23,20 @@ pip install .
 ```
 
 to install Augur.
+
+## Usage
+
+After installing the software, the GUI can be run from the terminal. Activate the Augur Conda environment using
+
+```bash
+conda activate augur
+```
+
+and open the GUI by running
+
+```bash
+augur
+```
 
 
 
