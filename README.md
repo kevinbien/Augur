@@ -1,1 +1,3 @@
-# Augur - Software for Automatic Zebra Finch Song Detection
+# Augur 
+
+Augur is a Python application for automatic zebra finch song detection. 
