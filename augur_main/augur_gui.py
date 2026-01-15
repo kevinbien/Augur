@@ -126,7 +126,7 @@ def record_and_detect(
         print(e)
 
 
-# Function for filtering out files containing song within a larger folder of recordings
+# Function for detecting files containing song within a larger folder of recordings
 def process_folder(
     model,
     input_folder,
@@ -219,7 +219,7 @@ class AugurGUI(QWidget):
 
         # Set processes to none until user starts process
         self.recording_process = None
-        self.filtering_process = None
+        self.detecting_process = None
 
         # Set folder paths to None until user chooses
         self.song_loc = None
@@ -230,18 +230,18 @@ class AugurGUI(QWidget):
         self.ifolder_button = QPushButton("Choose input folder", self)
         self.start_button = QPushButton("Start recording", self)
         self.stop_button = QPushButton("Stop recording", self)
-        self.filter_button = QPushButton("Filter song from existing folder")
+        self.detect_button = QPushButton("detect song from existing folder")
         self.start_button.clicked.connect(self._start_recording)
         self.stop_button.clicked.connect(self._stop_recording)
-        self.filter_button.clicked.connect(self._filter_song)
+        self.detect_button.clicked.connect(self._detect_song)
         self.ifolder_button.clicked.connect(self._choose_folder)
         self.ofolder_button.clicked.connect(self._choose_folder)
         layout.addWidget(self.ifolder_button, 5, 1)
         layout.addWidget(self.ofolder_button, 6, 1)
-        layout.addWidget(self.filter_button, 7, 0, 1, 2)
-        font = self.filter_button.font()
+        layout.addWidget(self.detect_button, 7, 0, 1, 2)
+        font = self.detect_button.font()
         font.setBold(True)
-        self.filter_button.setFont(font)
+        self.detect_button.setFont(font)
         layout.addWidget(self.start_button, 10, 0)
         layout.addWidget(self.stop_button, 10, 1)
 
@@ -251,7 +251,7 @@ class AugurGUI(QWidget):
         self.threshold_label = QLabel("Threshold:", self)
         self.overlap_label = QLabel("Overlap:", self)
         self.folders_label = QLabel("Input/output locations", self)
-        self.recording_label = QLabel("Filter song during live recording", self)
+        self.recording_label = QLabel("detect song during live recording", self)
         self.ifolder_label = QLabel("No input folder selected:", self)
         self.ofolder_label = QLabel("No output folder selected:", self)
         self.device_label = QLabel("Select input device:", self)
@@ -308,7 +308,7 @@ class AugurGUI(QWidget):
             self.stop_button,
             self.device_label,
             self.device_box,
-            self.filter_button,
+            self.detect_button,
             self.ifolder_button,
             self.ifolder_label,
             self.ofolder_button,
@@ -341,16 +341,16 @@ class AugurGUI(QWidget):
             )
             self.recording_process.start()
 
-    def _filter_song(self):
+    def _detect_song(self):
         if (
-            isinstance(self.filtering_process, Process)
-            and self.filtering_process.is_alive()
+            isinstance(self.detecting_process, Process)
+            and self.detecting_process.is_alive()
         ):
             print(
-                "Please wait for filtering process to finish before starting again..."
+                "Please wait for detecting process to finish before starting again..."
             )
         if self.song_loc is None:
-            print("Please provide an input folder before filtering for song")
+            print("Please provide an input folder before detecting for song")
         else:
             try:
                 model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
@@ -360,7 +360,7 @@ class AugurGUI(QWidget):
                     overlap_windows = 2
                 else:
                     overlap_windows = 4
-                self.filtering_process = Process(
+                self.detecting_process = Process(
                     target=process_folder,
                     args=(
                         model_path,
@@ -371,7 +371,7 @@ class AugurGUI(QWidget):
                         overlap_windows,
                     ),
                 )
-                self.filtering_process.start()
+                self.detecting_process.start()
             except:
                 print(
                     "Please make sure you have correctly specified the input folder..."
