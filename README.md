@@ -47,14 +47,9 @@ When running Augur, the CNN takes 1 second windows from a recording and outputs 
 - Overlap: percentage by which prediction windows overlap
   - For example: when using 50% overlap, two 0.5s frames are combined into one prediction window
  
-**Input/output locations** are directories that Augur reads from and writes to.
+**Input/output locations** are directories that Augur reads from and writes to. Augur processes .wav files from the input directory and all its subdirectories, and copies any file determined to contain song to a local "Found Song" subdirectory, and to the output directory if provided.
 
-Augur processes .wav files from the input directory and all its subdirectories, and copies any file determined to contain song
-to a local "Found Song" subdirectory, and to the output directory if provided.
-
-**Live detection** can be performed by choose an input device from the drop down menu and pressing "Start recording". 
-
-After opening the recording, Augur will read 0.5s chunks from the input device's stream and output the CNN predictions in the terminal. During live recording, any bout of song detected is saved to the output directory along with the 5s of audio preceding and following the bout. 
+**Live detection** can be performed by choose an input device from the drop down menu and pressing "Start recording". After opening the recording, Augur will read 0.5s chunks from the input device's stream and output the CNN predictions in the terminal. During live recording, any bout of song detected is saved to the output directory along with the 5s of audio preceding and following the bout. 
 
 *Live detection is still in development and will be updated for performance and usability*
 
