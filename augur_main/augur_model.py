@@ -140,7 +140,7 @@ class AugurDataset(Dataset):
     def __len__(self):
         return len(self.labels)
 
-    # returns 128 by 129 pixel mel spectrogram of training audio and its corresponding label
+    # returns 128 by 257 pixel mel spectrogram of training audio and its corresponding label
     def __getitem__(self, index):
         path = self.labels.iloc[index, 0]
         label = self.labels.iloc[index, 1]
