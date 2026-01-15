@@ -52,9 +52,13 @@ When running Augur, the CNN takes 1 second windows from a recording and outputs 
 Augur processes .wav files from the input directory and all its subdirectories, and copies any file determined to contain song
 to a local "Found Song" subdirectory, and to the output directory if provided.
 
-**Live Detection**
+**Live detection** can be performed by choose an input device from the drop down menu and pressing "Start recording". 
 
-Live song detection is still in development. To test it, choose an input device from the drop down menu corresponding to an input audio stream. After pressing "Start recording", Augur will read 0.5s chunks from the input device's stream and output the CNN predictions in the terminal. During live recording, any bout of song detected is saved to the output directory along with the 5s of audio preceding and following the bout. 
+After opening the recording, Augur will read 0.5s chunks from the input device's stream and output the CNN predictions in the terminal. During live recording, any bout of song detected is saved to the output directory along with the 5s of audio preceding and following the bout. 
+
+*Live detection is still in development and will be updated for performance and usability*
+
+
 
 
 
