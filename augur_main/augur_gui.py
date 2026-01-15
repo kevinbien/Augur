@@ -209,7 +209,7 @@ class AugurGUI(QWidget):
         super().__init__()
 
         # Set up the window
-        self.setWindowTitle("Augur 0.2")
+        self.setWindowTitle("Augur 0.3")
         width, height = get_monitors()[0].width // 4, get_monitors()[0].height // 3
         self.setGeometry(0, 0, width, height)
 

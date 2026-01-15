@@ -1,6 +1,6 @@
 Metadata-Version: 2.2
 Name: augur
-Version: 0.2
+Version: 0.3
 Requires-Dist: audioread==3.0.1
 Requires-Dist: certifi==2025.1.31
 Requires-Dist: cffi==1.17.1

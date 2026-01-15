@@ -120,7 +120,7 @@ class AugurModel(nn.Module):
             return has_song
         else:
             mels = torch.unsqueeze(generate_spectrogram(audio), 0)
-            pred = self.forward(mels).item()
+            pred = 1 / (1 + np.exp(-self.forward(mels).item()))
             if print_predictions:
                 print(pred)
             has_song = pred >= threshold

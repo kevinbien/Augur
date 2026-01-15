@@ -45,8 +45,10 @@ def record_and_detect(
         # Create audio stream
         stream = sd.InputStream(
             device=input_device,
+            channels=1,  # Assume first channel is sufficient
             samplerate=rate,
             blocksize=(rate // 2),
+            dtype="float32",
         )
         stream.start()
 
@@ -72,16 +74,17 @@ def record_and_detect(
 
         # Loop that processed audio from the input stream. Runs until stop_button is pressed, deleting the thread.
         # Read an initial 0.5s segment of audio from the input stream
-        chunk = stream.read((rate // 2))
+        chunk = stream.read((rate // 2))  # Stored as a tuple containing a np array
         chunks.append(chunk)
         while True:
+
             # Read a 0.5s segment of audio from the input stream
             chunk = stream.read((rate // 2))
-            window = chunk
-            print(window)
+            window = np.concat((np.ravel(chunks[-1][0]), np.ravel(chunk[0])))
             chunks.append(chunk)
+
             # If the segment contains song, set has_song to true and set counter to padding_seconds * 2.
-            if model.classify(window, threshold=threshold):
+            if model.classify(window, threshold=threshold, print_predictions=True):
                 if not has_song:
                     has_song = True
                     found_songs += 1
@@ -89,19 +92,20 @@ def record_and_detect(
             # Otherwise, decrease counter by one.
             else:
                 counter -= 1
+
             if counter == 0:
                 # If counter equals zero and chunks contains song, save the segments in chunks as an audio file and
                 # remove audio segments from chunks until chunks contains only padding_seconds of audio
                 if has_song:
-                    audio = np.empty(len(chunk) * len(chunks), dtype=np.float32)
+                    audio = np.empty(len(chunk[0]) * len(chunks), dtype=np.float32)
                     n = len(chunks)
                     for i in range(0, n):
                         chunk = chunks.popleft()
                         # Ensures that chunks contains padding_seconds of audio after saving audio.
-                        if len(chunks) <= padding_seconds * 2:
+                        if len(chunks) < padding_seconds * 2:
                             chunks.append(chunk)
+                        chunk = np.ravel(chunk[0])
                         audio[i * len(chunk) : (i + 1) * len(chunk)] = chunk
-                    assert len(chunks) == padding_seconds * 2
                     sf.write(
                         Path(song_dest) / f"found_song_{found_songs}.wav",
                         audio,
@@ -111,6 +115,7 @@ def record_and_detect(
                     print(f"Saved {out}")
                     has_song = False
                     counter = padding_seconds * 2
+
                 # If counter equals zero but chunks does not contain song, remove the leftmost segment in chunks
                 # and increment counter by one.
                 else:
@@ -204,7 +209,7 @@ class AugurGUI(QWidget):
         super().__init__()
 
         # Set up the window
-        self.setWindowTitle("Augur 0.2")
+        self.setWindowTitle("Augur 0.3")
         width, height = get_monitors()[0].width // 4, get_monitors()[0].height // 3
         self.setGeometry(0, 0, width, height)
 
