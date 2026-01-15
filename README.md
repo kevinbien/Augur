@@ -1,6 +1,8 @@
 # Augur 
 
-Augur is a Python application for automatic zebra finch song detection. Using a lightweight CNN, it can quickly and reliably distinguish zebra finch song from other common noises encountered when recording zebra finches in the lab, no additional training required.
+Augur is a Python application for automatic zebra finch song detection. Using a lightweight CNN, it can distinguish zebra finch song from other common noises encountered when recording zebra finches in the lab, without requiring additional training by the user.
+
+*The underlying CNN was trained on recordings from 7 adult zebra finches. Validation data will be presented in a future update. 
 
 ## Features
 
@@ -13,7 +15,7 @@ Augur is a Python application for automatic zebra finch song detection. Using a 
 Augur can be easily installed using Conda. After cloning the repo, run 'cd Augur' to access the local repository. You can then run
 
 ```bash
-conda create env create -n 'environment.yml'
+conda env create -n 'environment.yml'
 ```
 
 to install the necessary packages and 
@@ -38,18 +40,18 @@ augur
 
 ## Usage
 
-When running Augur, the CNN takes 1 second windows from a recording and outputs the probability that each window contains song.
+Internally, the model takes 1 second windows from a recording and outputs the probability that each window contains song. 
 
 **Classification settings** are parameters the model uses when making predictions:
 
 - Input channel: the channel read from when processing input recordings
+  - The input channel is zero indexed; mono files always use channel 0 
 - Threshold: the probability above which a window is considered to contain song
 - Overlap: percentage by which prediction windows overlap
-  - For example: when using 50% overlap, two 0.5s frames are combined into one prediction window
  
 **Input/output locations** are directories that Augur reads from and writes to. Augur processes .wav files from the input directory and all its subdirectories, and copies any file determined to contain song to a local "Found Song" subdirectory, and to the output directory if provided.
 
-**Live detection** can be performed by choose an input device from the drop down menu and pressing "Start recording". After opening the recording, Augur will read 0.5s chunks from the input device's stream and output the CNN predictions in the terminal. During live recording, any bout of song detected is saved to the output directory along with the 5s of audio preceding and following the bout. 
+**Live detection** can be performed by choose an input device from the drop down menu and pressing "Start recording". After opening the recording, the model will read 0.5s chunks from the input device's stream and output predictions in the terminal. During live recording, any bout of song detected is saved to the output directory along with the 5s of audio preceding and following the bout. 
 
 *Live detection is still in development and will be updated for performance and usability*
 
