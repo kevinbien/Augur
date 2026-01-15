@@ -29,6 +29,9 @@ import pyqtgraph as pg
 from augur_main.augur_model import AugurModel
 
 
+# Current algorithm for real-time song detection
+# Will be updated for efficient waveform/prediction display
+# padding_seconds: how many seconds of recording before and after a frame containing song will be played
 def record_and_detect(
     input_device,
     song_dest,
@@ -41,10 +44,11 @@ def record_and_detect(
 
         # Create audio stream
         stream = sd.InputStream(
-            # device=self.device_box.currentData(),
             device=input_device,
+            channels=1,  # Assume first channel is sufficient
             samplerate=rate,
             blocksize=(rate // 2),
+            dtype="float32",
         )
         stream.start()
 
@@ -69,12 +73,18 @@ def record_and_detect(
         counter = padding_seconds * 2
 
         # Loop that processed audio from the input stream. Runs until stop_button is pressed, deleting the thread.
+        # Read an initial 0.5s segment of audio from the input stream
+        chunk = stream.read((rate // 2))  # Stored as a tuple containing a np array
+        chunks.append(chunk)
         while True:
+
             # Read a 0.5s segment of audio from the input stream
             chunk = stream.read((rate // 2))
+            window = np.concat((np.ravel(chunks[-1][0]), np.ravel(chunk[0])))
             chunks.append(chunk)
+
             # If the segment contains song, set has_song to true and set counter to padding_seconds * 2.
-            if model.classify(chunk, threshold=threshold):
+            if model.classify(window, threshold=threshold, print_predictions=True):
                 if not has_song:
                     has_song = True
                     found_songs += 1
@@ -82,19 +92,20 @@ def record_and_detect(
             # Otherwise, decrease counter by one.
             else:
                 counter -= 1
+
             if counter == 0:
                 # If counter equals zero and chunks contains song, save the segments in chunks as an audio file and
                 # remove audio segments from chunks until chunks contains only padding_seconds of audio
                 if has_song:
-                    audio = np.empty(len(chunk) * len(chunks), dtype=np.float32)
+                    audio = np.empty(len(chunk[0]) * len(chunks), dtype=np.float32)
                     n = len(chunks)
                     for i in range(0, n):
                         chunk = chunks.popleft()
                         # Ensures that chunks contains padding_seconds of audio after saving audio.
-                        if len(chunks) <= padding_seconds * 2:
+                        if len(chunks) < padding_seconds * 2:
                             chunks.append(chunk)
+                        chunk = np.ravel(chunk[0])
                         audio[i * len(chunk) : (i + 1) * len(chunk)] = chunk
-                    assert len(chunks) == padding_seconds * 2
                     sf.write(
                         Path(song_dest) / f"found_song_{found_songs}.wav",
                         audio,
@@ -104,6 +115,7 @@ def record_and_detect(
                     print(f"Saved {out}")
                     has_song = False
                     counter = padding_seconds * 2
+
                 # If counter equals zero but chunks does not contain song, remove the leftmost segment in chunks
                 # and increment counter by one.
                 else:
@@ -114,6 +126,7 @@ def record_and_detect(
         print(e)
 
 
+# Function for filtering out files containing song within a larger folder of recordings
 def process_folder(
     model,
     input_folder,
@@ -123,6 +136,7 @@ def process_folder(
     overlap_windows,
     clear=False,
 ):
+    # Load model when first calling the function
     if not isinstance(model, AugurModel):
         print("Loading model...")
         m = AugurModel()
@@ -130,8 +144,8 @@ def process_folder(
         m.eval()
         model = m
         print("Model loaded!")
-    local_output = f"Found Song ({threshold}, {str(round(1.0 - 1/overlap_windows, ndigits=2))}% overlap)"
-    local_output = Path(input_folder) / local_output
+
+    # Processes subdirectories in the input directory
     subdirs = [file for file in Path(input_folder).iterdir() if file.is_dir()]
     if len(subdirs) > 0:
         for subdir in subdirs:
@@ -145,15 +159,24 @@ def process_folder(
                     overlap_windows,
                     clear,
                 )
+
     if any(Path(input_folder).glob("*.wav")):
+        # Creates local "Found Song" folder containing only song-containing files
+        local_output = f"Found Song ({threshold}, {str(round(1.0 - 1/overlap_windows, ndigits=2))}% overlap)"
+        local_output = Path(input_folder) / local_output
+
+        # If local_output already exists, remake it
         if local_output.exists():
             for file in local_output.glob("*.wav"):
                 file.unlink()
         local_output.mkdir(parents=True, exist_ok=True)
+
         if output_folder is not None:
             print(f"outputting to {local_output} and {output_folder}")
         else:
             print(f"outputting to {local_output}")
+
+        # Detects song-containing files in input_folder
         for file in Path(input_folder).glob("*.wav"):
             try:
                 print(f"processing {file.name}")
@@ -373,6 +396,8 @@ class AugurGUI(QWidget):
                 self.ofolder_label.setText(f"Save to: {folder}")
 
 
+# Work in progress: display waveform/spectrogram/predictions during live recording
+"""
 class RecordingWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -383,6 +408,7 @@ class RecordingWindow(QWidget):
         layout = QVBoxLayout(self)
 
         self.plot_widget = pg.PlotWidget()
+"""
 
 
 def main():

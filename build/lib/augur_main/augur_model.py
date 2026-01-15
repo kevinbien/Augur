@@ -84,6 +84,7 @@ class AugurModel(nn.Module):
         audio,
         threshold=0.5,
         numeric_predictions=False,
+        print_predictions=False,
         sample_rate=22050,
         overlap_windows=2,
     ):
@@ -108,6 +109,8 @@ class AugurModel(nn.Module):
                 mels = torch.unsqueeze(generate_spectrogram(window, sr=sample_rate), 0)
                 pred = 1 / (1 + np.exp(-self.forward(mels).item()))
                 preds.append(pred)
+                if print_predictions:
+                    print(pred)
                 if pred >= threshold:
                     has_song = True
                     if not numeric_predictions:
@@ -118,6 +121,8 @@ class AugurModel(nn.Module):
         else:
             mels = torch.unsqueeze(generate_spectrogram(audio), 0)
             pred = self.forward(mels).item()
+            if print_predictions:
+                print(pred)
             has_song = pred >= threshold
             if numeric_predictions:
                 return has_song, pred
