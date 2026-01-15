@@ -38,15 +38,16 @@ augur
 
 ## Usage
 
-When running Augur, the CNN inputs 1 second windows from a recording and predicts the probability that the given window contains singing.
+When running Augur, the CNN takes 1 second windows from a recording and outputs the probability that each window contains song.
 
 **Classification settings** are parameters the model uses when making predictions:
 
 - Input channel: the channel read from when processing input recordings
 - Threshold: the probability above which a window is considered to contain song
-- 
+- Overlap: percentage by which windows used for prediction overlap
+  - For example: when using 50% overlap, two 0.5s frames are combined into one prediction window
 
 
 
 
-
+ 
