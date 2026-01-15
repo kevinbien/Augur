@@ -53,6 +53,10 @@ When running Augur, the CNN takes 1 second windows from a recording and outputs 
 
 *Live detection is still in development and will be updated for performance and usability*
 
+## Why "Augur"?
+
+[Augury](https://en.wikipedia.org/wiki/Augury) was the ancient practice of divining the future by reading omens from birds. This software can't do that, but machine learning does feel like magic!
+
 
 
 
