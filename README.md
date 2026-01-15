@@ -12,15 +12,15 @@ Augur is a Python application for automatic zebra finch song detection. Using a 
 
 Augur can be easily installed using Conda. After cloning the repo, run 'cd Augur' to access the local repository. You can then run
 
-'''bash
+```bash
 conda create env create -n 'environment.yml'
-'''
+```
 
 to install the necessary packages and 
 
-'''bash
+```bash
 pip install .
-'''
+```
 
 to install Augur.
 
