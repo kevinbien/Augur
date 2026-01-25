@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 )
 import pyqtgraph as pg
 
-from augur_main.augur_model import AugurModel
+from augur_main.model import AugurModel
 
 
 # Current algorithm for real-time song detection

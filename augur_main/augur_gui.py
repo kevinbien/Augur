@@ -1,17 +1,10 @@
 import sys
-from multiprocessing import Process
+from multiprocessing import Process, shared_memory
 import sounddevice as sd
-from collections import deque
 from screeninfo import get_monitors
 from pathlib import Path
-import librosa
-import os
-import traceback
-import shutil
 import numpy as np
-import soundfile as sf
-import torch
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QSizePolicy,
@@ -19,189 +12,14 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QPushButton,
     QComboBox,
-    QVBoxLayout,
     QFileDialog,
     QLabel,
     QLineEdit,
 )
 import pyqtgraph as pg
+import librosa
 
-from augur_main.augur_model import AugurModel
-
-
-# Current algorithm for real-time song detection
-# Will be updated for efficient waveform/prediction display
-# padding_seconds: how many seconds of recording before and after a frame containing song will be played
-def record_and_detect(
-    input_device,
-    song_dest,
-    model_path,
-    threshold,
-    padding_seconds=5,
-    rate=22050,
-):
-    try:
-
-        # Create audio stream
-        stream = sd.InputStream(
-            device=input_device,
-            channels=1,  # Assume first channel is sufficient
-            samplerate=rate,
-            blocksize=(rate // 2),
-            dtype="float32",
-        )
-        stream.start()
-
-        # Load model
-        print("Loading model...")
-        model = AugurModel()
-        model.load_state_dict(torch.load(model_path, weights_only=True))
-        model.eval()
-        print("Model loaded!")
-
-        # Create data structure to hold 0.5s segments of audio from the input stream
-        chunks = deque()
-
-        # Create two variables before reading audio from the stream. has_song is True iff at least one of the
-        # audio segments stored in chunks is classified as song. found_songs stores the number of songs found while
-        # the program is running.
-        has_song = False
-        found_songs = 0
-
-        # Create the counter variable, which counts how many more 0.5s segments of audio the program will read
-        # before either saving the audio stored in chunks or removing the leftmost segment stored in chunks.
-        counter = padding_seconds * 2
-
-        # Loop that processed audio from the input stream. Runs until stop_button is pressed, deleting the thread.
-        # Read an initial 0.5s segment of audio from the input stream
-        chunk = stream.read((rate // 2))  # Stored as a tuple containing a np array
-        chunks.append(chunk)
-        while True:
-
-            # Read a 0.5s segment of audio from the input stream
-            chunk = stream.read((rate // 2))
-            window = np.concat((np.ravel(chunks[-1][0]), np.ravel(chunk[0])))
-            chunks.append(chunk)
-
-            # If the segment contains song, set has_song to true and set counter to padding_seconds * 2.
-            if model.classify(window, threshold=threshold, print_predictions=True):
-                if not has_song:
-                    has_song = True
-                    found_songs += 1
-                counter = padding_seconds * 2
-            # Otherwise, decrease counter by one.
-            else:
-                counter -= 1
-
-            if counter == 0:
-                # If counter equals zero and chunks contains song, save the segments in chunks as an audio file and
-                # remove audio segments from chunks until chunks contains only padding_seconds of audio
-                if has_song:
-                    audio = np.empty(len(chunk[0]) * len(chunks), dtype=np.float32)
-                    n = len(chunks)
-                    for i in range(0, n):
-                        chunk = chunks.popleft()
-                        # Ensures that chunks contains padding_seconds of audio after saving audio.
-                        if len(chunks) < padding_seconds * 2:
-                            chunks.append(chunk)
-                        chunk = np.ravel(chunk[0])
-                        audio[i * len(chunk) : (i + 1) * len(chunk)] = chunk
-                    sf.write(
-                        Path(song_dest) / f"found_song_{found_songs}.wav",
-                        audio,
-                        rate,
-                    )
-                    out = Path(song_dest) / f"found_song_{found_songs}.wav"
-                    print(f"Saved {out}")
-                    has_song = False
-                    counter = padding_seconds * 2
-
-                # If counter equals zero but chunks does not contain song, remove the leftmost segment in chunks
-                # and increment counter by one.
-                else:
-                    chunks.popleft()
-                    counter += 1
-
-    except Exception as e:
-        print(e)
-
-
-# Function for detecting files containing song within a larger folder of recordings
-def process_folder(
-    model,
-    input_folder,
-    output_folder,
-    channel,
-    threshold,
-    overlap_windows,
-    clear=False,
-):
-    # Load model when first calling the function
-    if not isinstance(model, AugurModel):
-        print("Loading model...")
-        m = AugurModel()
-        m.load_state_dict(torch.load(model, weights_only=True))
-        m.eval()
-        model = m
-        print("Model loaded!")
-
-    # Processes subdirectories in the input directory
-    subdirs = [file for file in Path(input_folder).iterdir() if file.is_dir()]
-    if len(subdirs) > 0:
-        for subdir in subdirs:
-            if not "Found Song" in subdir.name:
-                process_folder(
-                    model,
-                    subdir,
-                    output_folder,
-                    channel,
-                    threshold,
-                    overlap_windows,
-                    clear,
-                )
-
-    if any(Path(input_folder).glob("*.wav")):
-        # Creates local "Found Song" folder containing only song-containing files
-        local_output = f"Found Song ({threshold}, {str(round(1.0 - 1/overlap_windows, ndigits=2))}% overlap)"
-        local_output = Path(input_folder) / local_output
-
-        # If local_output already exists, remake it
-        if local_output.exists():
-            for file in local_output.glob("*.wav"):
-                file.unlink()
-        local_output.mkdir(parents=True, exist_ok=True)
-
-        if output_folder is not None:
-            print(f"outputting to {local_output} and {output_folder}")
-        else:
-            print(f"outputting to {local_output}")
-
-        # Detects song-containing files in input_folder
-        for file in Path(input_folder).glob("*.wav"):
-            try:
-                print(f"processing {file.name}")
-                audio, sr = librosa.load(file, sr=22050, mono=False)
-                if audio.ndim > 1:
-                    audio = audio[channel]
-                if model.classify(
-                    audio=audio,
-                    threshold=threshold,
-                    sample_rate=sr,
-                    overlap_windows=overlap_windows,
-                ):
-                    shutil.copy(file, local_output)
-                    if output_folder is not None:
-                        shutil.copy(
-                            file,
-                            Path(output_folder) / f"{input_folder.name}_{file.name}",
-                        )
-                    print(f"found song in {file.name}")
-            except Exception as e:
-                traceback.print_exception(type(e), e, e.__traceback__)
-                print(f"something went wrong... skipping file {file.name}")
-        if clear:
-            os.system("cls" if os.name == "nt" else "clear")
-        print(f"finished processing {str(input_folder)}!")
+from augur_main.functions import process_folder, record_and_detect
 
 
 class AugurGUI(QWidget):
@@ -209,7 +27,7 @@ class AugurGUI(QWidget):
         super().__init__()
 
         # Set up the window
-        self.setWindowTitle("Augur 0.35")
+        self.setWindowTitle("Augur 0.5")
         width, height = get_monitors()[0].width // 4, get_monitors()[0].height // 3
         self.setGeometry(0, 0, width, height)
 
@@ -220,6 +38,8 @@ class AugurGUI(QWidget):
         # Set processes to none until user starts process
         self.recording_process = None
         self.detecting_process = None
+        self.shm = None
+        self.recording_window = None
 
         # Set folder paths to None until user chooses
         self.song_loc = None
@@ -330,13 +150,27 @@ class AugurGUI(QWidget):
             print("Recording started")
             input_device = self.device_box.currentData()
             model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
+
+            # Create shared memory
+            rate = 22050
+            max_seconds = 60
+            array_size = rate * max_seconds
+            self.shm = shared_memory.SharedMemory(
+                create=True, size=np.zeros((2, array_size), dtype=np.float32).nbytes
+            )
+
+            self.recording_window = RecordingWindow(self.shm.name, rate, max_seconds)
+            self.recording_window.show()
+
             self.recording_process = Process(
                 target=record_and_detect,
                 args=(
+                    model_path,
                     input_device,
                     self.song_dest,
-                    model_path,
-                    float(self.threshold_text.text()),
+                    self.shm.name,
+                    rate,
+                    max_seconds,
                 ),
             )
             self.recording_process.start()
@@ -354,12 +188,14 @@ class AugurGUI(QWidget):
         else:
             try:
                 model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
+
                 if self.overlap_box.currentText() == r"0% overlap":
                     overlap_windows = 1
                 elif self.overlap_box.currentText() == r"50% overlap":
                     overlap_windows = 2
                 else:
                     overlap_windows = 4
+
                 self.detecting_process = Process(
                     target=process_folder,
                     args=(
@@ -381,6 +217,14 @@ class AugurGUI(QWidget):
         try:
             self.recording_process.terminate()
             self.recording_process = None
+
+            self.recording_window.close()
+            self.recording_window = None
+
+            self.shm.close()
+            self.shm.unlink()
+            self.shm = None
+
             print("Recording ended")
         except AttributeError:
             print("Please start the recording before ending it...")
@@ -396,19 +240,114 @@ class AugurGUI(QWidget):
                 self.ofolder_label.setText(f"Save to: {folder}")
 
 
-# Work in progress: display waveform/spectrogram/predictions during live recording
-"""
 class RecordingWindow(QWidget):
-    def __init__(self):
+    def __init__(self, shm_name, rate, max_seconds):
         super().__init__()
 
         # Set up the window
         self.setWindowTitle(" GUI")
         width, height = get_monitors()[0].width // 2, get_monitors()[0].height // 3
-        layout = QVBoxLayout(self)
+        layout = QGridLayout(self)
+        self.setGeometry(0, 0, width, height)
+
+        # Add toggle buttons
+        self.toggle_raw = QPushButton("Waveform view")
+        self.toggle_raw.clicked.connect(self._toggle_raw)
+        layout.addWidget(self.toggle_raw, 0, 0)
+        self.toggle_rms = QPushButton("RMS view")
+        self.toggle_rms.clicked.connect(self._toggle_rms)
+        layout.addWidget(self.toggle_rms, 0, 1)
+        self.toggle_spec = QPushButton("Prediction view")
+        self.toggle_spec.clicked.connect(self._toggle_pred)
+        layout.addWidget(self.toggle_spec, 0, 2)
+        self.toggle_spec = QPushButton("Spectrogram view")
+        self.toggle_spec.clicked.connect(self._toggle_spec)
+        layout.addWidget(self.toggle_spec, 0, 3)
 
         self.plot_widget = pg.PlotWidget()
-"""
+        self.plot_widget.setBackground("w")
+        self.plot_widget.setTitle("Live Data Stream", color="k", size="12pt")
+        self.plot_widget.setLabel("left", "Value", color="k")
+        self.plot_widget.setLabel("bottom", "Sample", color="k")
+        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        layout.addWidget(self.plot_widget, 1, 0, 1, 4)
+
+        # Load audio from recording
+        self.rate = rate
+        self.shm = shared_memory.SharedMemory(name=shm_name)
+        self.audio = np.ndarray(
+            (2, self.rate * max_seconds), dtype=np.float32, buffer=self.shm.buf
+        )
+        self.plotted_audio = np.zeros(self.rate)
+
+        self.mode = "raw"
+
+        # Create waveform plot
+        pen = pg.mkPen(color="b", width=2)
+        self.wave_plot = self.plot_widget.plot(self.plotted_audio, pen=pen)
+
+        # Create spectrogram image plot
+        self.spec_plot = pg.ImageItem()
+        self.plot_widget.addItem(self.spec_plot)
+        self.spec_plot.setVisible(False)
+
+        # Set up timer for updates
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._update_plot)
+        self.timer.start(500)  # Update every 50ms
+
+    def _update_plot(self):
+
+        if self.mode == "raw" or self.mode == "rms":
+            reshaped = self.audio[0].reshape(len(self.audio[0]) // 1000, 1000)
+            if self.mode == "raw":
+                self.plotted_audio = reshaped.mean(axis=1)
+            elif self.mode == "rms":
+                self.plotted_audio = np.sqrt((reshaped**2).mean(axis=1))
+            self.wave_plot.setData(self.plotted_audio)
+        elif self.mode == "pred":
+            reshaped = self.audio[1].reshape(len(self.audio[0]) // 1000, 1000)
+            self.plotted_audio = reshaped.mean(axis=1)
+            self.wave_plot.setData(self.plotted_audio)
+        else:
+            mels = librosa.feature.melspectrogram(
+                y=self.audio[0],
+                n_fft=1024,
+                hop_length=int(self.rate / 128),
+                fmin=300,
+                fmax=10000,
+            )
+            mels = librosa.power_to_db(mels)
+            self.spec_plot.setImage(mels.T, autoLevels=True)
+
+    def _toggle_raw(self):
+        self.mode = "raw"
+        self.plot_widget.enableAutoRange()
+        self.spec_plot.setVisible(False)
+        self.wave_plot.setVisible(True)
+
+    def _toggle_rms(self):
+        self.mode = "rms"
+        self.plot_widget.enableAutoRange()
+        self.spec_plot.setVisible(False)
+        self.wave_plot.setVisible(True)
+
+    def _toggle_pred(self):
+        self.mode = "pred"
+        self.plot_widget.setYRange(0, 1, padding=0)
+        self.spec_plot.setVisible(False)
+        self.wave_plot.setVisible(True)
+
+    def _toggle_spec(self):
+        self.mode = "spec"
+        self.plot_widget.enableAutoRange()
+        self.spec_plot.setVisible(True)
+        self.wave_plot.setVisible(False)
+
+    def closeEvent(self, event):
+        self.timer.stop()
+        self.shm.close()
+        event.accept()
 
 
 def main():
