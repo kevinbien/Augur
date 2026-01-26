@@ -1,7 +1,6 @@
 import numpy as np
 from pathlib import Path
 from datetime import datetime
-import shutil
 import soundfile as sf
 import torch
 from augur_main.model import AugurModel
@@ -13,14 +12,18 @@ import traceback
 
 def save_song(audio, song_dest, rate, song_start, song_end):
     if song_start < song_end:
-        window = audio[song_start * (rate // 2) : song_end * (rate // 2)]
+        window = audio[:, song_start * (rate // 2) : song_end * (rate // 2)]
     if song_start > song_end:
-        window = audio[song_start:]
-        window = np.concat((window, audio[:song_start]))
+        window = audio[0, song_start:]
+        window = np.concat((window, audio[0, :song_end]))
+        preds = audio[1, song_start:]
+        preds = np.concat((preds, audio[1, :song_end]))
+        window = np.vstack((window, preds))
+
     name = f"{str(datetime.now()).replace(':', '-')}.wav"
     sf.write(
         Path(song_dest) / name,
-        window,
+        window.T,
         rate,
     )
     out = Path(song_dest) / name
@@ -71,18 +74,22 @@ def record_and_detect(
             audio[0, chunk * (rate // 2) : (chunk + 1) * (rate // 2)] = np.ravel(
                 stream.read(rate // 2)[0]
             )
+
             if chunk == 0:
                 window = np.concat((audio[0, -(rate // 2) :], audio[0, : (rate // 2)]))
             else:
                 window = audio[0, (chunk - 1) * (rate // 2) : (chunk + 1) * (rate // 2)]
+
             has_song, pred = model.classify(
                 window, threshold=threshold, sample_rate=rate, numeric_predictions=True
             )
+
             if chunk == 0:
                 audio[1, -(rate // 2) :] = pred
                 audio[1, : (rate // 2)] = pred
             else:
                 audio[1, (chunk - 1) * (rate // 2) : (chunk + 1) * (rate // 2)] = pred
+
             if has_song:
                 if song_start == None:
                     song_start = (chunk - 2 * padding_seconds) % max_chunks
@@ -90,20 +97,20 @@ def record_and_detect(
             else:
                 chunks_since_song += 1
             chunk = (chunk + 1) % max_chunks
+
             if (
                 chunks_since_song == padding_seconds * 2
                 and song_start != None
                 or chunk + 1 == song_start
             ):
-                save_song(audio[0], song_dest, rate, song_start, chunk)
+                save_song(audio, song_dest, rate, song_start, chunk)
                 song_start = None
 
     except Exception as e:
         traceback.print_exception(type(e), e, e.__traceback__)
 
 
-# To do: add additional channel to each audio file containing predictions for each frame
-# Function for detecting files containing song within a larger folder of recordings
+# Function for detecting files containing song within a larger folder of recordings and labeling song within them
 def process_folder(
     model,
     input_folder,
@@ -135,7 +142,9 @@ def process_folder(
                     overlap_windows,
                 )
 
+    # Processes folders containing .wav files
     if any(Path(input_folder).glob("*.wav")):
+
         # Creates local "Found Song" folder containing only song-containing files
         local_output = f"Found Song ({threshold}, {str(round(1.0 - 1/overlap_windows, ndigits=2))}% overlap)"
         local_output = Path(input_folder) / local_output
@@ -157,18 +166,32 @@ def process_folder(
                 print(f"processing {file.name}")
                 audio, sr = librosa.load(file, sr=22050, mono=False)
                 if audio.ndim > 1:
-                    audio = audio[channel]
-                if model.classify(
+                    input = audio[channel]
+                else:
+                    input = audio
+                has_song, preds = model.classify(
                     audio=audio,
                     threshold=threshold,
                     sample_rate=sr,
+                    numeric_predictions=True,
                     overlap_windows=overlap_windows,
-                ):
-                    shutil.copy(file, local_output)
+                )
+                if has_song:
+
+                    # Add channel containing labels
+                    preds = np.repeat(preds, sr // overlap_windows)
+                    preds = preds[: len(input)]
+                    audio = np.vstack((audio, preds)).T
+                    sf.write(
+                        local_output / file.name,
+                        audio,
+                        sr,
+                    )
                     if output_folder is not None:
-                        shutil.copy(
-                            file,
-                            Path(output_folder) / f"{input_folder.name}_{file.name}",
+                        sf.write(
+                            Path(output_folder) / file.name,
+                            audio,
+                            sr,
                         )
                     print(f"found song in {file.name}")
             except Exception as e:

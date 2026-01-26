@@ -298,6 +298,7 @@ class RecordingWindow(QWidget):
 
     def _update_plot(self):
 
+        # Downsample the audio by averaging across bins
         if self.mode == "raw" or self.mode == "rms":
             reshaped = self.audio[0].reshape(len(self.audio[0]) // 1000, 1000)
             if self.mode == "raw":
@@ -309,7 +310,7 @@ class RecordingWindow(QWidget):
             reshaped = self.audio[1].reshape(len(self.audio[0]) // 1000, 1000)
             self.plotted_audio = reshaped.mean(axis=1)
             self.wave_plot.setData(self.plotted_audio)
-        else:
+        elif self.mode == "spec":
             mels = librosa.feature.melspectrogram(
                 y=self.audio[0],
                 n_fft=1024,
