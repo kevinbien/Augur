@@ -170,7 +170,7 @@ def process_folder(
                 else:
                     input = audio
                 has_song, preds = model.classify(
-                    audio=audio,
+                    audio=input,
                     threshold=threshold,
                     sample_rate=sr,
                     numeric_predictions=True,
@@ -179,9 +179,7 @@ def process_folder(
                 if has_song:
 
                     # Add channel containing labels
-                    preds = np.repeat(preds, sr // overlap_windows)
-                    preds = preds[: len(input)]
-                    audio = np.vstack((audio, preds)).T
+                    audio = np.vstack((input, preds)).T
                     sf.write(
                         local_output / file.name,
                         audio,

@@ -120,7 +120,7 @@ class AugurModel(nn.Module):
             len(audio) >= sample_rate
         ), "Cannot classify audio segments less than 1s..."
         has_song = False
-        preds = []
+        preds = np.zeros(len(audio))
         if len(audio) != sample_rate:
             seconds = (len(audio) // sample_rate) + 1
             audio = librosa.util.fix_length(audio, size=seconds * sample_rate)
@@ -136,7 +136,11 @@ class AugurModel(nn.Module):
             mels = generate_spectrogram(window, sr=sample_rate)
             mels = torch.unsqueeze(mels, dim=0).to(torch.float32)
             pred = 1 / (1 + np.exp(-self.forward(mels).item()))
-            preds.append(pred)
+            preds[
+                (i * sample_rate)
+                // overlap_windows : ((i + overlap_windows) * sample_rate)
+                // overlap_windows
+            ] = pred
             if pred >= threshold:
                 has_song = True
                 if not numeric_predictions:
