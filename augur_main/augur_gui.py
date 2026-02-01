@@ -4,6 +4,7 @@ import sounddevice as sd
 from screeninfo import get_monitors
 from pathlib import Path
 import numpy as np
+import re
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
@@ -58,12 +59,12 @@ class AugurGUI(QWidget):
         self.ofolder_button.clicked.connect(self._choose_folder)
         layout.addWidget(self.ifolder_button, 5, 1)
         layout.addWidget(self.ofolder_button, 6, 1)
-        layout.addWidget(self.detect_button, 7, 0, 1, 2)
+        layout.addWidget(self.detect_button, 8, 0, 1, 2)
         font = self.detect_button.font()
         font.setBold(True)
         self.detect_button.setFont(font)
-        layout.addWidget(self.start_button, 10, 0)
-        layout.addWidget(self.stop_button, 10, 1)
+        layout.addWidget(self.start_button, 11, 0)
+        layout.addWidget(self.stop_button, 11, 1)
 
         # Create labels
         self.settings_label = QLabel("Classification settings", self)
@@ -74,6 +75,9 @@ class AugurGUI(QWidget):
         self.recording_label = QLabel("Detect song during live recording", self)
         self.ifolder_label = QLabel("No input folder selected:", self)
         self.ofolder_label = QLabel("No output folder selected:", self)
+        self.exclude_keywords_label = QLabel(
+            "Exclude subdirectories with keywords:", self
+        )
         self.device_label = QLabel("Select input device:", self)
         layout.addWidget(self.settings_label, 0, 0, 1, 2)
         layout.addWidget(self.channel_label, 1, 0)
@@ -82,8 +86,9 @@ class AugurGUI(QWidget):
         layout.addWidget(self.folders_label, 4, 0, 1, 2)
         layout.addWidget(self.ifolder_label, 5, 0)
         layout.addWidget(self.ofolder_label, 6, 0)
-        layout.addWidget(self.recording_label, 8, 0, 1, 2)
-        layout.addWidget(self.device_label, 9, 0)
+        layout.addWidget(self.exclude_keywords_label, 7, 0)
+        layout.addWidget(self.recording_label, 9, 0, 1, 2)
+        layout.addWidget(self.device_label, 10, 0)
         font = self.folders_label.font()
         font.setBold(True)
         self.settings_label.setFont(font)
@@ -104,16 +109,19 @@ class AugurGUI(QWidget):
         self.overlap_box = QComboBox()
         self.overlap_box.addItems([r"0% overlap", r"50% overlap", r"75% overlap"])
         self.overlap_box.setCurrentText(r"50% overlap")
-        layout.addWidget(self.device_box, 9, 1)
+        layout.addWidget(self.device_box, 10, 1)
         layout.addWidget(self.overlap_box, 3, 1)
 
         # Create text fields
         self.channel_text = QLineEdit()
         self.threshold_text = QLineEdit()
+        self.exclude_keywords_text = QLineEdit()
+        self.exclude_keywords_text.setText("Found Song,")
         self.channel_text.setText("0")
         self.threshold_text.setText("0.5")
         layout.addWidget(self.channel_text, 1, 1)
         layout.addWidget(self.threshold_text, 2, 1)
+        layout.addWidget(self.exclude_keywords_text, 7, 1)
 
         # Make widgets fill cells
         for i in range(2):
@@ -196,6 +204,10 @@ class AugurGUI(QWidget):
                 else:
                     overlap_windows = 4
 
+                excluded = re.split(
+                    pattern=r",\s+", string=self.exclude_keywords_text.text()
+                )
+
                 self.detecting_process = Process(
                     target=process_folder,
                     args=(
@@ -205,6 +217,7 @@ class AugurGUI(QWidget):
                         int(self.channel_text.text()),
                         float(self.threshold_text.text()),
                         overlap_windows,
+                        excluded,
                     ),
                 )
                 self.detecting_process.start()

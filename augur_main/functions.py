@@ -118,6 +118,7 @@ def process_folder(
     channel,
     threshold,
     overlap_windows,
+    excluded,
 ):
     # Load model when first calling the function
     if not isinstance(model, AugurModel):
@@ -132,7 +133,11 @@ def process_folder(
     subdirs = [file for file in Path(input_folder).iterdir() if file.is_dir()]
     if len(subdirs) > 0:
         for subdir in subdirs:
-            if not "Found Song" in subdir.name:
+            process_subdir = True
+            for keyword in excluded:
+                if keyword in subdir.name:
+                    process_subdir = False
+            if process_subdir:
                 process_folder(
                     model,
                     subdir,
@@ -140,13 +145,14 @@ def process_folder(
                     channel,
                     threshold,
                     overlap_windows,
+                    excluded,
                 )
 
     # Processes folders containing .wav files
     if any(Path(input_folder).glob("*.wav")):
 
         # Creates local "Found Song" folder containing only song-containing files
-        local_output = f"Found Song ({threshold}, {str(round(1.0 - 1/overlap_windows, ndigits=2))}% overlap)"
+        local_output = f"Found Song ({threshold}, {str(round((1.0 - 1/overlap_windows) * 100, ndigits=1))}% overlap)"
         local_output = Path(input_folder) / local_output
 
         # If local_output already exists, remake it
