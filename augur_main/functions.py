@@ -185,7 +185,7 @@ def process_folder(
                 if has_song:
 
                     # Add channel containing labels
-                    audio = np.vstack((input, preds)).T
+                    audio = np.vstack((audio, preds)).T
                     sf.write(
                         local_output / file.name,
                         audio,
