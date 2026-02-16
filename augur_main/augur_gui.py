@@ -205,7 +205,7 @@ class AugurGUI(QWidget):
                     overlap_windows = 4
 
                 excluded = re.split(
-                    pattern=r",\s+", string=self.exclude_keywords_text.text()
+                    pattern=r",\s*", string=self.exclude_keywords_text.text()
                 )
 
                 self.detecting_process = Process(
