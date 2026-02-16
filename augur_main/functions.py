@@ -45,7 +45,7 @@ def record_and_detect(
         # Load model
         print("Loading model...")
         model = AugurModel()
-        model.load_state_dict(torch.load(model_path, weights_only=True))
+        model.load_state_dict(torch.load(model_path, weights_only=True, map_location=m.device))
         model.eval()
         threshold = threshold
         print("Model loaded!")
@@ -124,7 +124,7 @@ def process_folder(
     if not isinstance(model, AugurModel):
         print("Loading model...")
         m = AugurModel()
-        m.load_state_dict(torch.load(model, weights_only=True))
+        m.load_state_dict(torch.load(model, weights_only=True, map_location=m.device))
         m.eval()
         model = m
         print("Model loaded!")
