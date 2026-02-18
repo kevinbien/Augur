@@ -30,6 +30,16 @@ def save_song(audio, song_dest, rate, song_start, song_end):
     print(f"Saved {out}")
 
 
+q = queue.Queue()
+
+# Taken from https://python-sounddevice.readthedocs.io/en/0.3.14/examples.html
+def callback(indata, frames, time, status):
+    """This is called (from a separate thread) for each audio block."""
+    if status:
+        print(status, file=sys.stderr)
+    q.put(indata.copy())
+
+
 # padding_seconds: how many seconds of recording before and after a frame containing song will be played
 def record_and_detect(
     model_path,
@@ -57,6 +67,7 @@ def record_and_detect(
             samplerate=rate,
             blocksize=(rate // 2),
             dtype="float32",
+            callback=callback,
         )
         stream.start()
 
@@ -71,9 +82,7 @@ def record_and_detect(
         max_chunks = max_seconds * 2  # Maximum number of chunks stored in array
 
         while True:
-            audio[0, chunk * (rate // 2) : (chunk + 1) * (rate // 2)] = np.ravel(
-                stream.read(rate // 2)[0]
-            )
+            audio[0, chunk * (rate // 2) : (chunk + 1) * (rate // 2)] = np.ravel(q.get())
 
             if chunk == 0:
                 window = np.concat((audio[0, -(rate // 2) :], audio[0, : (rate // 2)]))
