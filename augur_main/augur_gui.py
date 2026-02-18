@@ -157,7 +157,7 @@ class AugurGUI(QWidget):
         else:
             print("Recording started")
             input_device = self.device_box.currentData()
-            model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
+            model_path = Path(__file__).resolve().parent / "model_2.0_0.0093.pt"
 
             # Create shared memory
             rate = 22050
@@ -195,7 +195,7 @@ class AugurGUI(QWidget):
             print("Please provide an input folder before detecting for song")
         else:
             try:
-                model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
+                model_path = Path(__file__).resolve().parent / "model_2.0_0.0093.pt"
 
                 if self.overlap_box.currentText() == r"0% overlap":
                     overlap_windows = 1
