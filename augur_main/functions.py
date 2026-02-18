@@ -8,6 +8,7 @@ import sounddevice as sd
 from multiprocessing import shared_memory
 import librosa
 import traceback
+import queue
 
 
 def save_song(audio, song_dest, rate, song_start, song_end):
