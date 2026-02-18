@@ -56,7 +56,7 @@ def record_and_detect(
         # Load model
         print("Loading model...")
         model = AugurModel()
-        model.load_state_dict(torch.load(model_path, weights_only=True, map_location=m.device))
+        model.load_state_dict(torch.load(model_path, weights_only=True, map_location=model.device))
         model.eval()
         threshold = threshold
         print("Model loaded!")
