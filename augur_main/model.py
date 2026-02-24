@@ -137,7 +137,7 @@ class AugurModel(nn.Module):
                     (i * sample_rate)
                     // overlap_windows : ((i + overlap_windows) * sample_rate)
                     // overlap_windows
-                ] = pred
+                ] += pred / overlap_windows
             else:
                 preds = pred
         if numeric_predictions:
