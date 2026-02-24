@@ -47,7 +47,6 @@ Internally, the model takes 1 second windows from a recording and outputs the pr
 - Input channel: the channel read from when processing input recordings
   - The input channel is zero indexed; mono files always use channel 0 
 - Threshold: the probability above which a window is considered to contain song
-- Overlap: percentage by which prediction windows overlap
  
 **Input/output locations** are directories that Augur reads from and writes to. Augur processes .wav files from the input directory and all its subdirectories, and copies any file determined to contain song to a local "Found Song" subdirectory, and to the output directory if provided.
 
