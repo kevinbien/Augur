@@ -57,20 +57,19 @@ class AugurGUI(QWidget):
         self.detect_button.clicked.connect(self._detect_song)
         self.ifolder_button.clicked.connect(self._choose_folder)
         self.ofolder_button.clicked.connect(self._choose_folder)
-        layout.addWidget(self.ifolder_button, 5, 1)
-        layout.addWidget(self.ofolder_button, 6, 1)
-        layout.addWidget(self.detect_button, 8, 0, 1, 2)
+        layout.addWidget(self.ifolder_button, 4, 1)
+        layout.addWidget(self.ofolder_button, 5, 1)
+        layout.addWidget(self.detect_button, 7, 0, 1, 2)
         font = self.detect_button.font()
         font.setBold(True)
         self.detect_button.setFont(font)
-        layout.addWidget(self.start_button, 11, 0)
-        layout.addWidget(self.stop_button, 11, 1)
+        layout.addWidget(self.start_button, 10, 0)
+        layout.addWidget(self.stop_button, 10, 1)
 
         # Create labels
         self.settings_label = QLabel("Classification settings", self)
         self.channel_label = QLabel("Input channel:", self)
         self.threshold_label = QLabel("Threshold:", self)
-        self.overlap_label = QLabel("Overlap:", self)
         self.folders_label = QLabel("Input/output locations", self)
         self.recording_label = QLabel("Detect song during live recording", self)
         self.ifolder_label = QLabel("No input folder selected:", self)
@@ -82,13 +81,12 @@ class AugurGUI(QWidget):
         layout.addWidget(self.settings_label, 0, 0, 1, 2)
         layout.addWidget(self.channel_label, 1, 0)
         layout.addWidget(self.threshold_label, 2, 0)
-        layout.addWidget(self.overlap_label, 3, 0)
-        layout.addWidget(self.folders_label, 4, 0, 1, 2)
-        layout.addWidget(self.ifolder_label, 5, 0)
-        layout.addWidget(self.ofolder_label, 6, 0)
-        layout.addWidget(self.exclude_keywords_label, 7, 0)
-        layout.addWidget(self.recording_label, 9, 0, 1, 2)
-        layout.addWidget(self.device_label, 10, 0)
+        layout.addWidget(self.folders_label, 3, 0, 1, 2)
+        layout.addWidget(self.ifolder_label, 4, 0)
+        layout.addWidget(self.ofolder_label, 5, 0)
+        layout.addWidget(self.exclude_keywords_label, 6, 0)
+        layout.addWidget(self.recording_label, 8, 0, 1, 2)
+        layout.addWidget(self.device_label, 9, 0)
         font = self.folders_label.font()
         font.setBold(True)
         self.settings_label.setFont(font)
@@ -109,8 +107,7 @@ class AugurGUI(QWidget):
         self.overlap_box = QComboBox()
         self.overlap_box.addItems([r"0% overlap", r"50% overlap", r"75% overlap"])
         self.overlap_box.setCurrentText(r"50% overlap")
-        layout.addWidget(self.device_box, 10, 1)
-        layout.addWidget(self.overlap_box, 3, 1)
+        layout.addWidget(self.device_box, 9, 1)
 
         # Create text fields
         self.channel_text = QLineEdit()
@@ -121,7 +118,7 @@ class AugurGUI(QWidget):
         self.threshold_text.setText("0.5")
         layout.addWidget(self.channel_text, 1, 1)
         layout.addWidget(self.threshold_text, 2, 1)
-        layout.addWidget(self.exclude_keywords_text, 7, 1)
+        layout.addWidget(self.exclude_keywords_text, 6, 1)
 
         # Make widgets fill cells
         for i in range(2):
@@ -157,10 +154,10 @@ class AugurGUI(QWidget):
         else:
             print("Recording started")
             input_device = self.device_box.currentData()
-            model_path = Path(__file__).resolve().parent / "model_2.0_0.0093.pt"
+            model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
 
             # Create shared memory
-            rate = int(sd.query_devices(device=input_device)['default_samplerate'])
+            rate = 22050
             max_seconds = 60
             array_size = rate * max_seconds
             self.shm = shared_memory.SharedMemory(
@@ -189,20 +186,13 @@ class AugurGUI(QWidget):
             and self.detecting_process.is_alive()
         ):
             print(
-                "Please wait for detecting process to finish before starting again..."
+                "Please wait for process to finish before starting again..."
             )
-        if self.song_loc is None:
+        elif self.song_loc is None:
             print("Please provide an input folder before detecting for song")
         else:
             try:
-                model_path = Path(__file__).resolve().parent / "model_2.0_0.0093.pt"
-
-                if self.overlap_box.currentText() == r"0% overlap":
-                    overlap_windows = 1
-                elif self.overlap_box.currentText() == r"50% overlap":
-                    overlap_windows = 2
-                else:
-                    overlap_windows = 4
+                model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
 
                 excluded = re.split(
                     pattern=r",\s*", string=self.exclude_keywords_text.text()
@@ -216,7 +206,6 @@ class AugurGUI(QWidget):
                         self.song_dest,
                         int(self.channel_text.text()),
                         float(self.threshold_text.text()),
-                        overlap_windows,
                         excluded,
                     ),
                 )
