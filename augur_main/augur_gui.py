@@ -154,10 +154,10 @@ class AugurGUI(QWidget):
         else:
             print("Recording started")
             input_device = self.device_box.currentData()
-            model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
+            model_path = Path(__file__).resolve().parent / "model_2.0_0.0093.pt"
 
             # Create shared memory
-            rate = 22050
+            rate = int(sd.query_devices(device=input_device)['default_samplerate'])
             max_seconds = 60
             array_size = rate * max_seconds
             self.shm = shared_memory.SharedMemory(
@@ -192,7 +192,7 @@ class AugurGUI(QWidget):
             print("Please provide an input folder before detecting for song")
         else:
             try:
-                model_path = Path(__file__).resolve().parent / "model_1.0_0.0346.pt"
+                model_path = Path(__file__).resolve().parent / "model_2.0_0.0093.pt"
 
                 excluded = re.split(
                     pattern=r",\s*", string=self.exclude_keywords_text.text()
