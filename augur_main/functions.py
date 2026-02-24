@@ -127,7 +127,6 @@ def process_folder(
     output_folder,
     channel,
     threshold,
-    overlap_windows,
     excluded,
 ):
     # Load model when first calling the function
@@ -154,7 +153,6 @@ def process_folder(
                     output_folder,
                     channel,
                     threshold,
-                    overlap_windows,
                     excluded,
                 )
 
@@ -190,7 +188,6 @@ def process_folder(
                     threshold=threshold,
                     sample_rate=sr,
                     numeric_predictions=True,
-                    overlap_windows=overlap_windows,
                 )
                 if has_song:
 
