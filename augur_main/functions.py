@@ -95,10 +95,10 @@ def record_and_detect(
             )
 
             if chunk == 0:
-                audio[1, -(rate // 2) :] = pred
-                audio[1, : (rate // 2)] = pred
+                audio[1, -(rate // 2) :] += pred / 2
+                audio[1, : (rate // 2)] += pred / 2
             else:
-                audio[1, (chunk - 1) * (rate // 2) : (chunk + 1) * (rate // 2)] = pred
+                audio[1, (chunk - 1) * (rate // 2) : (chunk + 1) * (rate // 2)] += pred / 2
 
             if has_song:
                 if song_start == None:
