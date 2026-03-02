@@ -15,10 +15,10 @@ def save_song(audio, song_dest, rate, song_start, song_end):
     if song_start < song_end:
         window = audio[:, song_start * (rate // 2) : song_end * (rate // 2)]
     if song_start > song_end:
-        window = audio[0, song_start:]
-        window = np.concat((window, audio[0, :song_end]))
-        preds = audio[1, song_start:]
-        preds = np.concat((preds, audio[1, :song_end]))
+        window = audio[0, song_start * (rate // 2):]
+        window = np.concat((window, audio[0, :song_end * (rate // 2)]))
+        preds = audio[1, song_start * (rate // 2):]
+        preds = np.concat((preds, audio[1, :song_end * (rate // 2)]))
         window = np.vstack((window, preds))
 
     name = f"{str(datetime.now()).replace(':', '-')}.wav"
