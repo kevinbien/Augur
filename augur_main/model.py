@@ -16,16 +16,6 @@ def generate_spectrogram(wav, sr=22050):
     mels = torch.from_numpy(mels)
     return mels
 
-
-class AugurModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.device = (
-            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        )
-        self.to(self.device)
-        print(f"Using {self.device}")
-
 class AugurModel(nn.Module):
     def __init__(self):
         super().__init__()
