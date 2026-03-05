@@ -160,7 +160,7 @@ def process_folder(
     if any(Path(input_folder).glob("*.wav")):
 
         # Creates local "Found Song" folder containing only song-containing files
-        local_output = f"Found Song ({threshold}, {str(round((1.0 - 1/overlap_windows) * 100, ndigits=1))}% overlap)"
+        local_output = f"Found Song ({threshold})"
         local_output = Path(input_folder) / local_output
 
         # If local_output already exists, remake it
