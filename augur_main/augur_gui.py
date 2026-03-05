@@ -197,6 +197,7 @@ class AugurGUI(QWidget):
                 excluded = re.split(
                     pattern=r",\s*", string=self.exclude_keywords_text.text()
                 )
+                excluded.remove('')
 
                 self.detecting_process = Process(
                     target=process_folder,
