@@ -109,27 +109,28 @@ class AugurModel(nn.Module):
         else:
             seconds = 1
         windows = seconds * overlap_windows - (overlap_windows - 1)
-        for i in range(windows):
-            window = audio[
-                (i * sample_rate)
-                // overlap_windows : ((i + overlap_windows) * sample_rate)
-                // overlap_windows
-            ]
-            mels = generate_spectrogram(window, sr=sample_rate)
-            mels = torch.unsqueeze(mels, dim=0).to(torch.float32)
-            pred = 1 / (1 + np.exp(-self.forward(mels).item()))
-            if pred >= threshold:
-                has_song = True
-                if not numeric_predictions:
-                    return has_song
-            if len(audio) > sample_rate:
-                preds[
+        with torch.no_grad():
+            for i in range(windows):
+                window = audio[
                     (i * sample_rate)
                     // overlap_windows : ((i + overlap_windows) * sample_rate)
                     // overlap_windows
-                ] += pred / overlap_windows
-            else:
-                preds = pred
+                ]
+                mels = generate_spectrogram(window, sr=sample_rate)
+                mels = torch.unsqueeze(mels, dim=0).to(torch.float32)
+                pred = 1 / (1 + np.exp(-self.forward(mels).item()))
+                if pred >= threshold:
+                    has_song = True
+                    if not numeric_predictions:
+                        return has_song
+                if len(audio) > sample_rate:
+                    preds[
+                        (i * sample_rate)
+                        // overlap_windows : ((i + overlap_windows) * sample_rate)
+                        // overlap_windows
+                    ] += pred / overlap_windows
+                else:
+                    preds = pred
         if numeric_predictions:
             return has_song, preds
         return has_song
