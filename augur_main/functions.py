@@ -49,7 +49,7 @@ def record_and_detect(
     shm_name,
     rate,
     max_seconds,
-    threshold=0.5,
+    threshold,
     padding_seconds=5,
 ):
     try:
