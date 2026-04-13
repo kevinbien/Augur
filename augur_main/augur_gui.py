@@ -176,7 +176,7 @@ class AugurGUI(QWidget):
                     self.shm.name,
                     rate,
                     max_seconds,
-                    threshold,
+                    float(self.threshold_text.text()),
                 ),
             )
             self.recording_process.start()
