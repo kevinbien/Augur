@@ -10,11 +10,14 @@ def generate_spectrogram(wav, sr=22050):
     if isinstance(wav, str) or isinstance(wav, Path):
         wav, _ = librosa.load(wav)
     mels = librosa.feature.melspectrogram(
-        y=wav, n_fft=1024, hop_length=int(sr / 128), fmin=300, fmax=10000
+        y=wav, n_fft=1024, hop_length=int(sr / 128), fmin=1000, fmax=10000
     )
     mels = librosa.power_to_db(mels)
+    mels -= np.mean(mels)
+    mels /= np.std(mels)
     mels = torch.from_numpy(mels)
     return mels
+
 
 class AugurModel(nn.Module):
     def __init__(self):
@@ -30,59 +33,87 @@ class AugurModel(nn.Module):
             nn.Conv2d(
                 in_channels=1,
                 out_channels=32,
-                kernel_size=(9, 9),
-                padding="same",
-            ),
-            nn.BatchNorm2d(32),
-            nn.MaxPool2d((4, 2), (4, 2)),
-            nn.ReLU(),
-            nn.Conv2d(
-                in_channels=32,
-                out_channels=64,
                 kernel_size=(7, 7),
-                padding="same",
-            ),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Conv2d(
-                in_channels=64,
-                out_channels=64,
-                kernel_size=(5, 5),
-                padding="same",
-            ),
-            nn.GroupNorm(8, 64),
-            nn.ReLU(),
-            nn.Conv2d(
-                in_channels=64,
-                out_channels=64,
-                kernel_size=(3, 7),
-                padding="same",
-                dilation=1,
-            ),
-            nn.GroupNorm(8, 64),
-            nn.ReLU(),
-            nn.Conv2d(
-                in_channels=64,
-                out_channels=64,
-                kernel_size=(3, 7),
-                dilation=2,
-                padding="same",
-            ),
-            nn.GroupNorm(8, 64),
-            nn.MaxPool2d((2, 2), (2, 2)),
-            nn.ReLU(),
-            nn.Conv2d(
-                in_channels=64,
-                out_channels=32,
-                kernel_size=(3, 3),
                 padding="same",
             ),
             nn.GroupNorm(8, 32),
             nn.MaxPool2d((2, 2), (2, 2)),
             nn.ReLU(),
+            nn.Conv2d(
+                in_channels=32,
+                out_channels=64,
+                kernel_size=(5, 5),
+                padding="same",
+            ),
+            nn.GroupNorm(16, 64),
+            nn.MaxPool2d((2, 1), (2, 1)),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=64,
+                out_channels=128,
+                kernel_size=(3, 3),
+                padding="same",
+            ),
+            nn.GroupNorm(16, 128),
+            nn.MaxPool2d((2, 2), (2, 2)),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=128,
+                out_channels=128,
+                kernel_size=(3, 3),
+                padding="same",
+                groups=128,
+            ),
+            nn.GroupNorm(16, 128),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=128,
+                out_channels=256,
+                kernel_size=(1, 1),
+                padding="same",
+            ),
+            nn.GroupNorm(32, 256),
+            nn.MaxPool2d((2, 2), (2, 2)),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=256,
+                out_channels=256,
+                kernel_size=(3, 3),
+                padding="same",
+                groups=256,
+            ),
+            nn.GroupNorm(32, 256),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=256,
+                out_channels=512,
+                kernel_size=(1, 1),
+                padding="same",
+            ),
+            nn.GroupNorm(64, 512),
+            nn.MaxPool2d((2, 2), (2, 2)),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=512,
+                out_channels=512,
+                kernel_size=(3, 3),
+                padding="same",
+                groups=512,
+            ),
+            nn.GroupNorm(64, 512),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=512,
+                out_channels=1024,
+                kernel_size=(1, 1),
+                padding="same",
+            ),
+            nn.GroupNorm(128, 1024),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
-            nn.Dropout(0.1),
-            nn.Linear(32 * 8 * 16, 1),
+            nn.Dropout(0.2),
+            nn.Linear(1024, 1),
         )
 
     # feeds a batch of 128 by 129 pixel mel spectrograms into the model
@@ -128,9 +159,9 @@ class AugurModel(nn.Module):
                         (i * sample_rate)
                         // overlap_windows : ((i + overlap_windows) * sample_rate)
                         // overlap_windows
-                    ] += pred / overlap_windows
+                    ] += (pred / overlap_windows)
                 else:
-                    preds = pred
+                    preds[:] = pred
         if numeric_predictions:
             return has_song, preds
         return has_song
