@@ -99,7 +99,7 @@ def record_and_detect(
                 window = audio[0, (chunk - 1) * (rate // 2) : (chunk + 1) * (rate // 2)]
 
             has_song, pred = model.classify(
-                window, threshold=threshold, sample_rate=rate, numeric_predictions=True
+                window, threshold=threshold, sample_rate=rate, return_probs=True
             )
 
             if chunk == 0:
