@@ -9,16 +9,17 @@ from multiprocessing import shared_memory
 import librosa
 import traceback
 import queue
+import pandas as pd
 
 
 def save_song(audio, song_dest, rate, song_start, song_end):
     if song_start < song_end:
         window = audio[:, song_start * (rate // 2) : song_end * (rate // 2)]
     if song_start > song_end:
-        window = audio[0, song_start * (rate // 2):]
-        window = np.concat((window, audio[0, :song_end * (rate // 2)]))
-        preds = audio[1, song_start * (rate // 2):]
-        preds = np.concat((preds, audio[1, :song_end * (rate // 2)]))
+        window = audio[0, song_start * (rate // 2) :]
+        window = np.concat((window, audio[0, : song_end * (rate // 2)]))
+        preds = audio[1, song_start * (rate // 2) :]
+        preds = np.concat((preds, audio[1, : song_end * (rate // 2)]))
         window = np.vstack((window, preds))
 
     name = f"{str(datetime.now()).replace(':', '-')}.wav"
@@ -32,6 +33,7 @@ def save_song(audio, song_dest, rate, song_start, song_end):
 
 
 q = queue.Queue()
+
 
 # Taken from https://python-sounddevice.readthedocs.io/en/0.3.14/examples.html
 def callback(indata, frames, time, status):
@@ -56,7 +58,9 @@ def record_and_detect(
         # Load model
         print("Loading model...")
         model = AugurModel()
-        model.load_state_dict(torch.load(model_path, weights_only=True, map_location=model.device))
+        model.load_state_dict(
+            torch.load(model_path, weights_only=True, map_location=model.device)
+        )
         model.eval()
         threshold = threshold
         print("Model loaded!")
@@ -83,7 +87,9 @@ def record_and_detect(
         max_chunks = max_seconds * 2  # Maximum number of chunks stored in array
 
         while True:
-            audio[0, chunk * (rate // 2) : (chunk + 1) * (rate // 2)] = np.ravel(q.get())
+            audio[0, chunk * (rate // 2) : (chunk + 1) * (rate // 2)] = np.ravel(
+                q.get()
+            )
 
             if chunk == 0:
                 window = np.concat((audio[0, -(rate // 2) :], audio[0, : (rate // 2)]))
@@ -95,10 +101,16 @@ def record_and_detect(
             )
 
             if chunk == 0:
-                audio[1, -(rate // 2) :] = 0.5 * pred + 0.5 * audio[1, -((rate + 1) // 2)]
-                audio[1, : (rate // 2)] = 0.5 * pred + 0.5 * audio[1, -((rate + 1) // 2)]
+                audio[1, -(rate // 2) :] = (
+                    0.5 * pred + 0.5 * audio[1, -((rate + 1) // 2)]
+                )
+                audio[1, : (rate // 2)] = (
+                    0.5 * pred + 0.5 * audio[1, -((rate + 1) // 2)]
+                )
             else:
-                audio[1, (chunk - 1) * (rate // 2) : (chunk + 1) * (rate // 2)] = 0.5 * pred + 0.5 * audio[1, (chunk - 1) * (rate // 2)]
+                audio[1, (chunk - 1) * (rate // 2) : (chunk + 1) * (rate // 2)] = (
+                    0.5 * pred + 0.5 * audio[1, (chunk - 1) * (rate // 2)]
+                )
 
             if has_song:
                 if song_start == None:
@@ -127,7 +139,9 @@ def process_folder(
     output_folder,
     channel,
     threshold,
-    excluded,
+    excluded_keywords=[],
+    return_probs=False,
+    labels=True,
 ):
     # Load model when first calling the function
     if not isinstance(model, AugurModel):
@@ -143,7 +157,7 @@ def process_folder(
     if len(subdirs) > 0:
         for subdir in subdirs:
             process_subdir = True
-            for keyword in excluded:
+            for keyword in excluded_keywords:
                 if keyword in subdir.name:
                     process_subdir = False
             if process_subdir:
@@ -153,7 +167,9 @@ def process_folder(
                     output_folder,
                     channel,
                     threshold,
-                    excluded,
+                    excluded_keywords=excluded_keywords,
+                    return_probs=return_probs,
+                    labels=labels,
                 )
 
     # Processes folders containing .wav files
@@ -165,7 +181,7 @@ def process_folder(
 
         # If local_output already exists, remake it
         if local_output.exists():
-            for file in local_output.glob("*.wav"):
+            for file in local_output.glob("*.wav", case_sensitive=False):
                 file.unlink()
         local_output.mkdir(parents=True, exist_ok=True)
 
@@ -173,6 +189,11 @@ def process_folder(
             print(f"outputting to {local_output} and {output_folder}")
         else:
             print(f"outputting to {local_output}")
+
+        if return_probs:
+
+            # Creates dictionary mapping files to preds
+            probs_dict = {}
 
         # Detects song-containing files in input_folder
         for file in Path(input_folder).glob("*.wav"):
@@ -183,21 +204,23 @@ def process_folder(
                     input = audio[channel]
                 else:
                     input = audio
-                has_song, preds = model.classify(
+
+                has_song, probs = model.classify(
                     audio=input,
                     threshold=threshold,
                     sample_rate=sr,
-                    numeric_predictions=True,
+                    return_probs=True,
                 )
-                if has_song:
 
-                    # Add channel containing labels
-                    audio = np.vstack((audio, preds)).T
-                    sf.write(
-                        local_output / file.name,
-                        audio,
-                        sr,
-                    )
+                if has_song:
+                    if labels:
+                        # Add channel containing labels
+                        audio = np.vstack((audio, probs)).T
+                        sf.write(
+                            local_output / file.name,
+                            audio,
+                            sr,
+                        )
                     if output_folder is not None:
                         sf.write(
                             Path(output_folder) / file.name,
@@ -205,7 +228,17 @@ def process_folder(
                             sr,
                         )
                     print(f"found song in {file.name}")
+
+                if return_probs:
+                    probs_dict[file.name] = np.max(probs)
+
             except Exception as e:
                 traceback.print_exception(type(e), e, e.__traceback__)
                 print(f"something went wrong... skipping file {file.name}")
+
+        if return_probs:
+            df = pd.DataFrame.from_dict(probs_dict, orient="index")
+            df.to_csv(input_folder / f"{input_folder.name} Probs.csv")
+
         print(f"finished processing {str(input_folder)}!")
+
