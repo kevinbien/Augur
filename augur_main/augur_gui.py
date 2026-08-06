@@ -154,7 +154,7 @@ class AugurGUI(QWidget):
         else:
             print("Recording started")
             input_device = self.device_box.currentData()
-            model_path = Path(__file__).resolve().parent / "model_2.0_0.0093.pt"
+            model_path = Path(__file__).resolve().parent / "model_0.00702555014544891_22.pt"
 
             # Create shared memory
             rate = int(sd.query_devices(device=input_device)['default_samplerate'])
