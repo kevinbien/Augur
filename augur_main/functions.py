@@ -12,7 +12,7 @@ import queue
 import pandas as pd
 
 
-def save_song(audio, song_dest, rate, song_start, song_end):
+def save_song(audio, song_dest, rate, song_start, song_end, save_preds=False):
     if song_start < song_end:
         window = audio[:, song_start * (rate // 2) : song_end * (rate // 2)]
     if song_start > song_end:
@@ -20,7 +20,8 @@ def save_song(audio, song_dest, rate, song_start, song_end):
         window = np.concat((window, audio[0, : song_end * (rate // 2)]))
         preds = audio[1, song_start * (rate // 2) :]
         preds = np.concat((preds, audio[1, : song_end * (rate // 2)]))
-        window = np.vstack((window, preds))
+        if save_preds:
+            window = np.vstack((window, preds))
 
     name = f"{str(datetime.now()).replace(':', '-')}.wav"
     sf.write(
@@ -53,6 +54,7 @@ def record_and_detect(
     max_seconds,
     threshold,
     padding_seconds=5,
+    save_preds=False,
 ):
     try:
         # Load model
@@ -125,7 +127,7 @@ def record_and_detect(
                 and song_start != None
                 or chunk + 1 == song_start
             ):
-                save_song(audio, song_dest, rate, song_start, chunk)
+                save_song(audio, song_dest, rate, song_start, chunk, save_preds=save_preds)
                 song_start = None
 
     except Exception as e:
