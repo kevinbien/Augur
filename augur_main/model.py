@@ -68,6 +68,16 @@ class AugurModel(nn.Module):
             nn.ReLU(),
             nn.Conv2d(
                 in_channels=128,
+                out_channels=128,
+                kernel_size=(3, 3),
+                padding="same",
+                groups=128,
+                dilation=2,
+            ),
+            nn.GroupNorm(16, 128),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=128,
                 out_channels=256,
                 kernel_size=(1, 1),
                 padding="same",
@@ -86,6 +96,16 @@ class AugurModel(nn.Module):
             nn.ReLU(),
             nn.Conv2d(
                 in_channels=256,
+                out_channels=256,
+                kernel_size=(3, 3),
+                padding="same",
+                groups=256,
+                dilation=2,
+            ),
+            nn.GroupNorm(32, 256),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=256,
                 out_channels=512,
                 kernel_size=(1, 1),
                 padding="same",
@@ -99,6 +119,16 @@ class AugurModel(nn.Module):
                 kernel_size=(3, 3),
                 padding="same",
                 groups=512,
+            ),
+            nn.GroupNorm(64, 512),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=512,
+                out_channels=512,
+                kernel_size=(3, 3),
+                padding="same",
+                groups=512,
+                dilation=2,
             ),
             nn.GroupNorm(64, 512),
             nn.ReLU(),
@@ -125,43 +155,38 @@ class AugurModel(nn.Module):
         self,
         audio,
         threshold=0.5,
-        numeric_predictions=False,
+        return_probs=True,
         sample_rate=22050,
-        overlap_windows=2,
     ):
         assert (
             len(audio) >= sample_rate
         ), "Cannot classify audio segments less than 1s..."
         has_song = False
-        preds = np.zeros(len(audio))
+        probs = np.zeros(len(audio))
         if len(audio) != sample_rate:
             seconds = (len(audio) // sample_rate) + 1
             audio = librosa.util.fix_length(audio, size=seconds * sample_rate)
         else:
             seconds = 1
-        windows = seconds * overlap_windows - (overlap_windows - 1)
+        windows = seconds * 2 - (1)
         with torch.no_grad():
             for i in range(windows):
-                window = audio[
-                    (i * sample_rate)
-                    // overlap_windows : ((i + overlap_windows) * sample_rate)
-                    // overlap_windows
-                ]
+                window = audio[(i * sample_rate) // 2 : ((i + 2) * sample_rate) // 2]
                 mels = generate_spectrogram(window, sr=sample_rate)
                 mels = torch.unsqueeze(mels, dim=0).to(torch.float32)
-                pred = 1 / (1 + np.exp(-self.forward(mels).item()))
-                if pred >= threshold:
+                logit = self.forward(mels).item()
+                prob = 1 / (1 + np.exp(-logit))
+                if prob >= threshold:
                     has_song = True
-                    if not numeric_predictions:
+                    if not return_probs:
                         return has_song
                 if len(audio) > sample_rate:
-                    preds[
-                        (i * sample_rate)
-                        // overlap_windows : ((i + overlap_windows) * sample_rate)
-                        // overlap_windows
-                    ] += (pred / overlap_windows)
+                    window = probs[
+                        (i * sample_rate) // 2 : ((i + 2) * sample_rate) // 2
+                    ]
+                    window[:] = max(prob, np.max(window))
                 else:
-                    preds[:] = pred
-        if numeric_predictions:
-            return has_song, preds
+                    probs[:] = prob
+        if return_probs:
+            return has_song, probs
         return has_song
