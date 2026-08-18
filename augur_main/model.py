@@ -184,7 +184,7 @@ class AugurModel(nn.Module):
                     window = probs[
                         (i * sample_rate) // 2 : ((i + 2) * sample_rate) // 2
                     ]
-                    window[:] = max(prob, np.max(window))
+                    window[:] = prob
                 else:
                     probs[:] = prob
         if return_probs:
