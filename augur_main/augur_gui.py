@@ -193,7 +193,7 @@ class AugurGUI(QWidget):
             print("Please provide an input folder before detecting for song")
         else:
             try:
-                model_path = Path(__file__).resolve().parent / "model_2.0_0.0093.pt"
+                model_path = Path(__file__).resolve().parent / "model_0.00702555014544891_22.pt"
 
                 excluded = re.split(
                     pattern=r",\s*", string=self.exclude_keywords_text.text()
