@@ -7,8 +7,6 @@ from torch import nn
 
 # preprocessing functions
 def generate_spectrogram(wav, sr=22050):
-    if isinstance(wav, str) or isinstance(wav, Path):
-        wav, _ = librosa.load(wav)
     mels = librosa.feature.melspectrogram(
         y=wav, n_fft=1024, hop_length=int(sr / 128), fmin=1000, fmax=10000
     )
